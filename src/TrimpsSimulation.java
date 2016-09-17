@@ -42,9 +42,9 @@ public class TrimpsSimulation {
             tS.pM.buyCoordinations();
             tS.doMapsAndBuyStuff();
             tS.pM.buyCoordinations();
-            if (tS.pM.getDamageFactor()<damage){
-                System.out.println("DFGJOKSDFGJOSDFGJO");
-                System.out.println(tS.zone);
+            if (tS.zone==454){
+                System.out.println("453");
+                System.out.println(tS.enemyHealth());
             }
             tS.doZone();
             tS.endZone();
@@ -62,7 +62,7 @@ public class TrimpsSimulation {
 
     public TrimpsSimulation(final int[] perkLevels) {
         eM = new EquipmentManager(perkLevels[Perk.ARTISANISTRY.ordinal()]);
-        pM = new PopulationManager(perkLevels[Perk.CARPENTRY.ordinal()],
+        pM = new PopulationManager(perkLevels[Perk .CARPENTRY.ordinal()],
                 perkLevels[Perk.CARPENTRY2.ordinal()],
                 perkLevels[Perk.RESOURCEFUL.ordinal()],
                 perkLevels[Perk.COORDINATED.ordinal()]);
@@ -196,14 +196,14 @@ public class TrimpsSimulation {
 
     private double enemyHealth() {
         double res = 0;
-        res += 130 * Math.sqrt(zone) * Math.pow(3.265, zone / 2);
+        res += 130 * Math.sqrt(zone) * Math.pow(3.265, zone / 2d);
         res -= 110;
         res *= 0.508;
         if (zone >= 60) {
             res *= Math.pow(1.1, zone - 59);
         }
         if (zone >= 151) {
-            res *= 3 * Math.pow(1.05, Math.floor((zone - 150) / 6));
+            res *= 10 * Math.pow(1.05, Math.floor((zone - 150) / 6));
         }
         return Math.floor(res);
     }
