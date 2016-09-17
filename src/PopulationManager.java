@@ -38,6 +38,7 @@ public class PopulationManager {
         armyPopulation *= coordinationFactor;
         armyPopulation = Math.ceil(armyPopulation);
         damageFactor *= 1.25;
+        damageFactor = Math.ceil(damageFactor);
         unboughtCoordinations--;
         return true;
     }
