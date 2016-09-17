@@ -23,7 +23,7 @@ public class TrimpsSimulation {
     private double dropMod;
     private double metalMod;
     private double jCMod;
-    private double heliumMod;
+    private double lootingMod;
     private double helium;
     private int mapsRunZone;
     private double time;
@@ -43,8 +43,8 @@ public class TrimpsSimulation {
             tS.doMapsAndBuyStuff();
             tS.pM.buyCoordinations();
             if (tS.zone==454){
-                System.out.println("453");
-                System.out.println(tS.enemyHealth());
+                System.out.println("454");
+                System.out.println(tS.damageMod * tS.eM.gerTotalDamage() * tS.pM.getDamageFactor());
             }
             tS.doZone();
             tS.endZone();
@@ -81,7 +81,7 @@ public class TrimpsSimulation {
                 * (1 + 0.01 * perkLevels[Perk.MOTIVATION2.ordinal()])
                 * (1 + 0.05 * perkLevels[Perk.LOOTING.ordinal()])
                 * (1 + 0.0025 * perkLevels[Perk.LOOTING2.ordinal()]);
-        heliumMod = (1 + 0.05 * perkLevels[Perk.LOOTING.ordinal()])
+        lootingMod = (1 + 0.05 * perkLevels[Perk.LOOTING.ordinal()])
                 * (1 + 0.0025 * perkLevels[Perk.LOOTING2.ordinal()]);
         helium = 0;
         time = 0;
@@ -99,16 +99,6 @@ public class TrimpsSimulation {
     private void startZone() {
         zone++;
         mapsRunZone = 0;
-        heliumMod *= 1.005;
-        if (zone == 59) {
-            heliumMod *= 5;
-        }
-        if (zone == corruptionStart) {
-            heliumMod *= 2;
-        }
-        if (zone == 201) {
-            heliumMod *= 1.2;
-        }
         if (zone % goldenFrequency == 0) {
             goldenHeliumBought++;
             goldenHeliumMod += goldenHeliumBought / 100d;
@@ -189,6 +179,17 @@ public class TrimpsSimulation {
 
     private void addHelium() {
         //TODO fix
+        double heliumMod = lootingMod;
+        heliumMod *= Math.pow(1.005, zone);
+        if (zone >= 59) {
+            heliumMod *= 5;
+        }
+        if (zone >= corruptionStart) {
+            heliumMod *= 2;
+        }
+        if (zone >= 201) {
+            heliumMod *= 1.2;
+        }
         double a = 1.35 * (zone - 19);
         helium += heliumMod * goldenHeliumMod * (Math.pow(1.23, Math.sqrt(a))+a) * (1+ 0.15*Math.min(80,
                     Math.max(0, ((int) ((zone - corruptionStart) * 3)) + 2)));
