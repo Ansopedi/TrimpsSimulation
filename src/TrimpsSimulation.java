@@ -19,7 +19,8 @@ public class TrimpsSimulation {
     private final static int zoneSimulationRepeatAmount = 1000;
     private Perks perks;
     private double goldenHeliumMod;
-    private double goldenHeliumBought;
+    private double goldenBattleMod;
+    private double goldenBought;
     private double damageMod;
     private double dropMod;
     private double metalMod;
@@ -34,8 +35,9 @@ public class TrimpsSimulation {
     PopulationManager pM;
 
     public static void main(String[] args) {
-        int[] perks = new int[]{90,87,88,97,60000,37000,14000,39299,58,85,40};
-        Perks p = new Perks(perks,14600000000000d);
+        int[] perks = new int[] { 91, 88, 87, 98, 72500, 41500, 11800, 40803,
+                59, 84, 46 };
+        Perks p = new Perks(perks, 15500000000000d);
         TrimpsSimulation tS = new TrimpsSimulation(p);
         double highestHeHrPercentage = 0;
         while (true) {
@@ -46,18 +48,18 @@ public class TrimpsSimulation {
             tS.doZone();
             tS.endZone();
             double newHeHrPercentage = tS.getHeHrPercentage();
-            if (newHeHrPercentage<highestHeHrPercentage){
+            if (newHeHrPercentage < highestHeHrPercentage) {
                 break;
             }
-            highestHeHrPercentage=newHeHrPercentage;
+            highestHeHrPercentage = newHeHrPercentage;
         }
         System.out.println(highestHeHrPercentage);
-        System.out.println(tS.time/3600);
+        System.out.println(tS.time / 3600);
         System.out.println(tS.zone);
         System.out.println(tS.helium);
     }
-    
-    public double runSimulation(){
+
+    public double runSimulation() {
         double highestHeHrPercentage = 0;
         while (true) {
             startZone();
@@ -67,7 +69,7 @@ public class TrimpsSimulation {
             doZone();
             endZone();
             double newHeHrPercentage = getHeHrPercentage();
-            if (newHeHrPercentage<highestHeHrPercentage){
+            if (newHeHrPercentage < highestHeHrPercentage) {
                 break;
             }
             highestHeHrPercentage = newHeHrPercentage;
@@ -79,7 +81,7 @@ public class TrimpsSimulation {
         this.perks = perks;
         int[] perkLevels = perks.getPerkLevels();
         eM = new EquipmentManager(perkLevels[Perk.ARTISANISTRY.ordinal()]);
-        pM = new PopulationManager(perkLevels[Perk .CARPENTRY.ordinal()],
+        pM = new PopulationManager(perkLevels[Perk.CARPENTRY.ordinal()],
                 perkLevels[Perk.CARPENTRY2.ordinal()],
                 perkLevels[Perk.RESOURCEFUL.ordinal()],
                 perkLevels[Perk.COORDINATED.ordinal()]);
@@ -106,19 +108,26 @@ public class TrimpsSimulation {
         mapsRunZone = 0;
         metal = 0;
         goldenHeliumMod = 1;
-        goldenHeliumBought = 0;
+        goldenBattleMod = 1;
+        goldenBought = 0;
     }
-    
-    private double getHeHrPercentage(){
-        return (helium/time*3600)/perks.getSpentHelium();
+
+    private double getHeHrPercentage() {
+        return (helium / time * 3600) / perks.getSpentHelium();
     }
 
     private void startZone() {
         zone++;
         mapsRunZone = 0;
         if (zone % goldenFrequency == 0) {
-            goldenHeliumBought++;
-            goldenHeliumMod += goldenHeliumBought / 100d;
+            //TODO code properly
+            if (zone <= 600) {
+                goldenBought++;
+                goldenHeliumMod += goldenBought / 100d;
+            } else {
+                goldenBought++;
+                goldenBattleMod += goldenBought * 3d / 100d;
+            }
 
         }
         if (zone <= blacksmitheryZone) {
@@ -127,7 +136,8 @@ public class TrimpsSimulation {
     }
 
     private void doMapsAndBuyStuff() {
-        double damage = damageMod * eM.gerTotalDamage() * pM.getDamageFactor();
+        double damage = damageMod * goldenBattleMod * eM.gerTotalDamage()
+                * pM.getDamageFactor();
         double hp = enemyHealth();
         double damageFactor = damage / hp;
         int mapsToRun = mapsToRun(damageFactor);
@@ -147,8 +157,8 @@ public class TrimpsSimulation {
     }
 
     private void doZone() {
-        double damage = damageMod * eM.gerTotalDamage() * pM.getDamageFactor()
-                * (1d + 0.2d * mapsRunZone);
+        double damage = damageMod * goldenBattleMod * eM.gerTotalDamage()
+                * pM.getDamageFactor() * (1d + 0.2d * mapsRunZone);
         double hp = enemyHealth();
         double damageFactor = damage / hp;
         ZoneSimulation zS = new ZoneSimulation();
@@ -195,7 +205,7 @@ public class TrimpsSimulation {
     }
 
     private void addHelium() {
-        //TODO fix
+        // TODO fix
         double heliumMod = lootingMod;
         heliumMod *= Math.pow(1.005, zone);
         if (zone >= 59) {
@@ -208,8 +218,10 @@ public class TrimpsSimulation {
             heliumMod *= 1.2;
         }
         double a = 1.35 * (zone - 19);
-        helium += heliumMod * goldenHeliumMod * (Math.pow(1.23, Math.sqrt(a))+a) * (1+ 0.15*Math.min(80,
-                    Math.max(0, ((int) ((zone - corruptionStart) * 3)) + 2)));
+        helium += heliumMod * goldenHeliumMod
+                * (Math.pow(1.23, Math.sqrt(a)) + a)
+                * (1 + 0.15 * Math.min(80, Math.max(0,
+                        ((int) ((zone - corruptionStart) * 3)) + 2)));
     }
 
     private double enemyHealth() {
@@ -287,8 +299,8 @@ public class TrimpsSimulation {
 
         private double getHPModifier(final int pCell,
                 final EnemyType enemyType) {
-            //TODO properly implement
-            if (enemyType == EnemyType.NORMAL){
+            // TODO properly implement
+            if (enemyType == EnemyType.NORMAL) {
                 return 0.01;
             }
             double cellMod = (0.5 + 0.8 * (pCell / 100)) / 0.508;

@@ -8,9 +8,9 @@ public class PerksDeterminator {
     private Perks perks;
 
     public static void main(String[] args) {
-        int[] perkArray = new int[] { 90, 86, 86, 97, 64300, 37400, 11500,
-                37100, 58, 82, 46 };
-        double totalHelium = 14600000000000d;
+        int[] perkArray = new int[] { 91, 88, 87, 98, 72500, 41500, 11800,
+                40803, 59, 84, 46 };
+        double totalHelium = 15300000000000d;
         Perks perks = new Perks(perkArray, totalHelium);
         PerksDeterminator pD = new PerksDeterminator(perks);
         pD.printPerksToFile();
