@@ -196,14 +196,15 @@ public class TrimpsSimulation {
 
     private double enemyHealth() {
         double res = 0;
-        res += 130 * Math.sqrt(zone) * Math.pow(3.265, zone / 2);
+        res += 130 * Math.sqrt(zone) * Math.pow(3.265, zone / 2d);
         res -= 110;
         res *= 0.508;
+        
         if (zone >= 60) {
             res *= Math.pow(1.1, zone - 59);
         }
         if (zone >= 151) {
-            res *= 3 * Math.pow(1.05, Math.floor((zone - 150) / 6));
+            res *= 10 * Math.pow(1.05, Math.floor((zone - 150) / 6));
         }
         return Math.floor(res);
     }
