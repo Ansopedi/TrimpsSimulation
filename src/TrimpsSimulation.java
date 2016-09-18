@@ -196,20 +196,22 @@ public class TrimpsSimulation {
 
     private void addHelium() {
         //TODO fix
-        double heliumMod = lootingMod;
-        heliumMod *= Math.pow(1.005, zone);
+    	double heliumMod = 1;
         if (zone >= 59) {
             heliumMod *= 5;
         }
         if (zone >= corruptionStart) {
             heliumMod *= 2;
         }
+        double a = 1.35 * (zone - 19);
+        heliumMod = Math.round( heliumMod * Math.pow(1.23, Math.sqrt(a))) + Math.round( heliumMod * a );
         if (zone >= 201) {
             heliumMod *= 1.2;
         }
-        double a = 1.35 * (zone - 19);
-        helium += heliumMod * goldenHeliumMod * (Math.pow(1.23, Math.sqrt(a))+a) * (1+ 0.15*Math.min(80,
-                    Math.max(0, ((int) ((zone - corruptionStart) * 3)) + 2)));
+        heliumMod *= Math.pow(1.005, zone);
+        heliumMod *= lootingMod;
+        heliumMod *= goldenHeliumMod;
+        helium += heliumMod * (1 + 0.15*Math.min(80,Math.max(0, ((int) ((zone - corruptionStart) * 3)) + 2)));
     }
 
     private double enemyHealth() {
