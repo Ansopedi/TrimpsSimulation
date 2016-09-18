@@ -287,6 +287,10 @@ public class TrimpsSimulation {
 
         private double getHPModifier(final int pCell,
                 final EnemyType enemyType) {
+            //TODO properly implement
+            if (enemyType == EnemyType.NORMAL){
+                return 0.01;
+            }
             double cellMod = (0.5 + 0.8 * (pCell / 100)) / 0.508;
             if (pCell < 100) {
                 return cellMod * (enemyType == EnemyType.TOUGH ? 5 : 1);
