@@ -8,9 +8,8 @@ public class PerksDeterminator {
     private Perks perks;
 
     public static void main(String[] args) {
-        int[] perkArray = new int[] { 91, 88, 87, 98, 72500, 41500, 11800,
-                40803, 59, 84, 46 };
-        double totalHelium = 15300000000000d;
+        int[] perkArray = new int[] {91,88,87,98,73200,42300,11800,40700,59,84,46};
+        double totalHelium = 15400000000000d;
         Perks perks = new Perks(perkArray, totalHelium);
         PerksDeterminator pD = new PerksDeterminator(perks);
         pD.printPerksToFile();
@@ -82,10 +81,18 @@ public class PerksDeterminator {
             // TODO Auto-generated catch block
             e.printStackTrace();
         }
+        StringBuilder sB = new StringBuilder();
+        sB.append("{");
         for (int x = 0; x < Perk.values().length; x++) {
             writer.println(Perk.values()[x].name() + " : "
                     + perks.getLevel(Perk.values()[x]));
+            sB.append(perks.getLevel(Perk.values()[x]));
+            sB.append(",");
+
         }
+        sB.deleteCharAt(sB.length() - 1);
+        sB.append("}");
+        writer.println(sB.toString());
         writer.close();
     }
 
