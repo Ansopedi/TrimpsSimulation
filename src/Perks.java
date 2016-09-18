@@ -1,16 +1,21 @@
 
 public class Perks {
-    private long helium;
+    private double totalHelium;
+    private double helium;
     private int[] perks;
 
-    public Perks(final int[] perks) {
+    public Perks(final int[] perks, final double helium) {
+        totalHelium = helium;
+        this.helium = helium;
         this.perks = new int[Perk.values().length];
         for (int x = 0; x < Perk.values().length; x++) {
-            this.perks[x] = perks[x];
+            this.perks[x] = 0;
+            buyPerk(Perk.values()[x],perks[x]);
         }
     }
     
     public Perks(final Perks perks){
+        this.totalHelium = perks.totalHelium;
         this.helium = perks.helium;
         this.perks = new int[Perk.values().length];
         for (int x = 0; x < Perk.values().length; x++) {
@@ -46,5 +51,13 @@ public class Perks {
     
     public int getLevel(final Perk perk){
         return perks[perk.ordinal()];
+    }
+    
+    public int[] getPerkLevels(){
+        return perks;
+    }
+    
+    public double getSpentHelium(){
+        return totalHelium-helium;
     }
 }

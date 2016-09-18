@@ -17,6 +17,7 @@ public class TrimpsSimulation {
     private final static double[] mapOffsets = new double[] { 100, 0.75, 0.5,
             0.2, 0.13, 0.08, 0.05, 0.036, 0.03, 0.0275 };
     private final static int zoneSimulationRepeatAmount = 1000;
+    private Perks perks;
     private double goldenHeliumMod;
     private double goldenHeliumBought;
     private double damageMod;
@@ -34,33 +35,49 @@ public class TrimpsSimulation {
 
     public static void main(String[] args) {
         int[] perks = new int[]{90,87,88,97,60000,37000,14000,39299,58,85,40};
-        TrimpsSimulation tS = new TrimpsSimulation(perks);
-        double highestHeHr = 0;
+        Perks p = new Perks(perks,14600000000000d);
+        TrimpsSimulation tS = new TrimpsSimulation(p);
+        double highestHeHrPercentage = 0;
         while (true) {
             tS.startZone();
-            double damage = tS.pM.getDamageFactor();
             tS.pM.buyCoordinations();
             tS.doMapsAndBuyStuff();
             tS.pM.buyCoordinations();
-            if (tS.zone==454){
-                System.out.println("454");
-                System.out.println(tS.damageMod * tS.eM.gerTotalDamage() * tS.pM.getDamageFactor());
-            }
             tS.doZone();
             tS.endZone();
-            double newHeHr = tS.getHeHr();
-            if (newHeHr<highestHeHr){
+            double newHeHrPercentage = tS.getHeHrPercentage();
+            if (newHeHrPercentage<highestHeHrPercentage){
                 break;
             }
-            highestHeHr=newHeHr;
+            highestHeHrPercentage=newHeHrPercentage;
         }
-        System.out.println(highestHeHr);
+        System.out.println(highestHeHrPercentage);
         System.out.println(tS.time/3600);
         System.out.println(tS.zone);
         System.out.println(tS.helium);
     }
+    
+    public double runSimulation(){
+        double highestHeHrPercentage = 0;
+        while (true) {
+            startZone();
+            pM.buyCoordinations();
+            doMapsAndBuyStuff();
+            pM.buyCoordinations();
+            doZone();
+            endZone();
+            double newHeHrPercentage = getHeHrPercentage();
+            if (newHeHrPercentage<highestHeHrPercentage){
+                break;
+            }
+            highestHeHrPercentage = newHeHrPercentage;
+        }
+        return highestHeHrPercentage;
+    }
 
-    public TrimpsSimulation(final int[] perkLevels) {
+    public TrimpsSimulation(final Perks perks) {
+        this.perks = perks;
+        int[] perkLevels = perks.getPerkLevels();
         eM = new EquipmentManager(perkLevels[Perk.ARTISANISTRY.ordinal()]);
         pM = new PopulationManager(perkLevels[Perk .CARPENTRY.ordinal()],
                 perkLevels[Perk.CARPENTRY2.ordinal()],
@@ -92,8 +109,8 @@ public class TrimpsSimulation {
         goldenHeliumBought = 0;
     }
     
-    private double getHeHr(){
-        return helium/time*3600;
+    private double getHeHrPercentage(){
+        return (helium/time*3600)/perks.getSpentHelium();
     }
 
     private void startZone() {
