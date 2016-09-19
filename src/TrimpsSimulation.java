@@ -1,4 +1,6 @@
 import java.util.Random;
+import java.util.ArrayList;
+import java.util.List;
 
 public class TrimpsSimulation {
 
@@ -35,8 +37,8 @@ public class TrimpsSimulation {
     PopulationManager pM;
 
     public static void main(String[] args) {
-        int[] perks = new int[] { 91, 87, 86, 98, 73400, 40600, 10800,
-                39200, 58, 83, 45 };
+        int[] perks = new int[] { 91, 87, 86, 98, 73400, 40600, 10800, 39200,
+                58, 83, 45 };
         Perks p = new Perks(perks, 15500000000000d);
         TrimpsSimulation tS = new TrimpsSimulation(p);
         double highestHeHr = 0;
@@ -120,7 +122,7 @@ public class TrimpsSimulation {
         zone++;
         mapsRunZone = 0;
         if (zone % goldenFrequency == 0) {
-            //TODO code properly
+            // TODO code properly
             if (zone <= 530) {
                 goldenBought++;
                 goldenHeliumMod += goldenBought / 100d;
@@ -162,11 +164,7 @@ public class TrimpsSimulation {
         double hp = enemyHealth();
         double damageFactor = damage / hp;
         ZoneSimulation zS = new ZoneSimulation();
-        double res = 0;
-        for (int x = 0; x < zoneSimulationRepeatAmount; x++) {
-            res += zS.runZone(damageFactor);
-        }
-        res /= zoneSimulationRepeatAmount;
+        double res = zS.runZoneSimulation(damageFactor);
         time += res;
         metal += metalMod * res * pM.getPopulation();
         metal += dropMod * 17 * pM.getPopulation();
@@ -205,9 +203,9 @@ public class TrimpsSimulation {
     }
 
     private void addHelium() {
-        //TODO fix
+        // TODO fix
 
-    	double heliumMod = 1;
+        double heliumMod = 1;
         if (zone >= 59) {
             heliumMod *= 5;
         }
@@ -215,21 +213,23 @@ public class TrimpsSimulation {
             heliumMod *= 2;
         }
         double a = 1.35 * (zone - 19);
-        heliumMod = Math.round( heliumMod * Math.pow(1.23, Math.sqrt(a))) + Math.round( heliumMod * a );
+        heliumMod = Math.round(heliumMod * Math.pow(1.23, Math.sqrt(a)))
+                + Math.round(heliumMod * a);
         if (zone >= 201) {
             heliumMod *= 1.2;
         }
         heliumMod *= Math.pow(1.005, zone);
         heliumMod *= lootingMod;
         heliumMod *= goldenHeliumMod;
-        helium += heliumMod * (1 + 0.15*Math.min(80,Math.max(0, ((int) ((zone - corruptionStart) * 3)) + 2)));
+        helium += heliumMod * (1 + 0.15 * Math.min(80,
+                Math.max(0, ((int) ((zone - corruptionStart) * 3)) + 2)));
     }
 
     private double enemyHealth() {
         double res = 0;
         res += 130 * Math.sqrt(zone) * Math.pow(3.265, zone / 2d);
         res -= 110;
-        res *= 0.508;     
+        res *= 0.508;
         if (zone >= 60) {
             res *= Math.pow(1.1, zone - 59);
         }
@@ -249,6 +249,56 @@ public class TrimpsSimulation {
     }
 
     private class ZoneSimulation {
+        private double accTime = 0;
+        private int runs = 0;
+        private boolean done = false;
+        private final List<ZoneThread> threads = new ArrayList<>();
+
+        public double runZoneSimulation(final double damageFactor) {
+            int threadNumber = 1;
+            for (int x = 0; x < threadNumber; x++) {
+                ZoneThread z = new ZoneThread(damageFactor);
+                threads.add(z);
+            }
+            for (ZoneThread z: threads){
+                z.start();
+            }
+            for (ZoneThread z: threads){
+                try {
+                    z.join();
+                } catch (InterruptedException e) {
+                    // TODO Auto-generated catch block
+                    e.printStackTrace();
+                }
+            }
+            return accTime/runs;
+        }
+
+        private synchronized void addRun(final double time) {
+            runs++;
+            accTime += time;
+            if (runs == zoneSimulationRepeatAmount) {
+                for (ZoneThread z : threads) {
+                    z.running = false;
+                }
+            }
+        }
+
+        private class ZoneThread extends Thread {
+            private double damagefactor;
+            private boolean running;
+
+            private ZoneThread(final double damageFactor) {
+                this.damagefactor = damageFactor;
+                running = true;
+            }
+
+            public void run() {  
+                while (running) {
+                    addRun(runZone(damagefactor));
+                }
+            }
+        }
 
         private double runZone(final double damageFactor) {
             EnemyType[] zoneArray = createZone(Math.min(80,

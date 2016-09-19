@@ -8,9 +8,10 @@ public class PerksDeterminator {
     private Perks perks;
 
     public static void main(String[] args) {
-        int[] perkArray = new int[] { 90, 87, 86, 98, 73400, 40600, 10800,
+        int[] perkArray = new int[] { 90, 87, 86, 98, 79000, 40600, 10800,
                 39200, 58, 83, 45 };
         double totalHelium = 17100000000000d;
+        // TODO check for non-bought ones
         Perks perks = new Perks(perkArray, totalHelium);
         PerksDeterminator pD = new PerksDeterminator(perks);
         pD.printPerksToFile();
@@ -30,7 +31,7 @@ public class PerksDeterminator {
         TrimpsSimulation tS = new TrimpsSimulation(savedPerks);
         double beforeBuyHeHr = tS.runSimulation();
         while (true) {
-            System.out.println("iteration");
+            long time = System.nanoTime();
             int bestPerk = 0;
             int count = 0;
             double highestHeHrIncreasePerHelium = 0;
@@ -58,18 +59,17 @@ public class PerksDeterminator {
                 double heHrIncreasePerHelium = threads.get(x)
                         .getHeHrPerHeliumSpent();
                 int perkPosition = threads.get(x).perkPosition;
-                System.out.println(heHrIncreasePerHelium);
                 if (heHrIncreasePerHelium > highestHeHrIncreasePerHelium) {
                     highestHeHrIncreasePerHelium = heHrIncreasePerHelium;
                     bestPerk = perkPosition;
                 }
             }
+            System.out.println((System.nanoTime() - time) / 1000000);
             if (highestHeHrIncreasePerHelium > 0) {
                 savedPerks.buyPerk(Perk.values()[bestPerk],
                         Perk.values()[bestPerk].levelIncrease);
                 beforeBuyHeHr = threads.get(bestPerk).heHr;
                 perks = savedPerks;
-                System.out.println("write");
                 printPerksToFile();
             } else {
                 break;
@@ -127,7 +127,7 @@ public class PerksDeterminator {
         }
 
         private double getHeHrPerHeliumSpent() {
-            return (heHr - heHrBeforeBuy) / buyCost;
+            return (heHr / heHrBeforeBuy) / buyCost;
         }
     }
 }
