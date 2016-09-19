@@ -8,8 +8,9 @@ public class PerksDeterminator {
     private Perks perks;
 
     public static void main(String[] args) {
-        int[] perkArray = new int[] {91,88,87,98,73200,42300,11800,40700,59,84,46};
-        double totalHelium = 15400000000000d;
+        int[] perkArray = new int[] { 91, 87, 86, 98, 73400, 40600, 10800,
+                39200, 58, 83, 45 };
+        double totalHelium = 17100000000000d;
         Perks perks = new Perks(perkArray, totalHelium);
         PerksDeterminator pD = new PerksDeterminator(perks);
         pD.printPerksToFile();
@@ -30,7 +31,7 @@ public class PerksDeterminator {
             Perks savedPerks = new Perks(perks);
             int bestPerk = 0;
             int count = 0;
-            double highestHeHrPercentage = 0;
+            double highestHeHrIncreasePerHelium = 0;
             List<SimulationThread> threads = new ArrayList<>();
             for (Perk p : Perk.values()) {
                 Perks usePerks = new Perks(savedPerks);
@@ -50,14 +51,16 @@ public class PerksDeterminator {
                     // TODO Auto-generated catch block
                     e.printStackTrace();
                 }
-                double heHrPercent = threads.get(x).heHrPercent;
+                double heHrIncreasePerHelium = threads.get(x).heHr;
+                heHrIncreasePerHelium /= savedPerks.perkCost(Perk.values()[x],
+                        Perk.values()[x].levelIncrease);
                 int perkPosition = threads.get(x).perkPosition;
-                if (heHrPercent > highestHeHrPercentage) {
-                    highestHeHrPercentage = heHrPercent;
+                if (heHrIncreasePerHelium > highestHeHrIncreasePerHelium) {
+                    highestHeHrIncreasePerHelium = heHrIncreasePerHelium;
                     bestPerk = perkPosition;
                 }
             }
-            if (highestHeHrPercentage > 0) {
+            if (highestHeHrIncreasePerHelium > 0) {
                 savedPerks.buyPerk(Perk.values()[bestPerk],
                         Perk.values()[bestPerk].levelIncrease);
                 perks = savedPerks;
@@ -100,17 +103,17 @@ public class PerksDeterminator {
 
         private Perks perks;
         private int perkPosition;
-        private double heHrPercent;
+        private double heHr;
 
         public SimulationThread(final Perks perks, final int perkPosition) {
             this.perks = perks;
             this.perkPosition = perkPosition;
-            heHrPercent = 0;
+            heHr = 0;
         }
 
         public void run() {
             TrimpsSimulation tS = new TrimpsSimulation(perks);
-            heHrPercent = tS.runSimulation();
+            heHr = tS.runSimulation();
         }
     }
 }

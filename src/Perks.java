@@ -23,7 +23,7 @@ public class Perks {
         }
     }
     
-    private long perkCost(final Perk perk, final int amount){
+    public double perkCost(final Perk perk, final int amount){
         if (perk.additive){
             long base = perk.baseCost+((long)perk.scaleFactor*perks[perk.ordinal()]);
             return ((base+(long)(perk.scaleFactor*(amount-1)/2))*amount);
@@ -40,7 +40,7 @@ public class Perks {
     }
     
     public boolean buyPerk(final Perk perk, final int amount){
-        long cost = perkCost(perk,amount);
+        double cost = perkCost(perk,amount);
         if (cost<=helium){
             helium-=cost;
             perks[perk.ordinal()]+=amount;

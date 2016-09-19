@@ -39,7 +39,7 @@ public class TrimpsSimulation {
                 59, 84, 46 };
         Perks p = new Perks(perks, 15500000000000d);
         TrimpsSimulation tS = new TrimpsSimulation(p);
-        double highestHeHrPercentage = 0;
+        double highestHeHr = 0;
         while (true) {
             tS.startZone();
             tS.pM.buyCoordinations();
@@ -47,20 +47,20 @@ public class TrimpsSimulation {
             tS.pM.buyCoordinations();
             tS.doZone();
             tS.endZone();
-            double newHeHrPercentage = tS.getHeHrPercentage();
-            if (newHeHrPercentage < highestHeHrPercentage) {
+            double newHeHr = tS.getHeHr();
+            if (newHeHr < highestHeHr) {
                 break;
             }
-            highestHeHrPercentage = newHeHrPercentage;
+            highestHeHr = newHeHr;
         }
-        System.out.println(highestHeHrPercentage);
+        System.out.println(highestHeHr);
         System.out.println(tS.time / 3600);
         System.out.println(tS.zone);
         System.out.println(tS.helium);
     }
 
     public double runSimulation() {
-        double highestHeHrPercentage = 0;
+        double highestHeHr = 0;
         while (true) {
             startZone();
             pM.buyCoordinations();
@@ -68,13 +68,13 @@ public class TrimpsSimulation {
             pM.buyCoordinations();
             doZone();
             endZone();
-            double newHeHrPercentage = getHeHrPercentage();
-            if (newHeHrPercentage < highestHeHrPercentage) {
+            double newHeHr = getHeHr();
+            if (newHeHr < highestHeHr) {
                 break;
             }
-            highestHeHrPercentage = newHeHrPercentage;
+            highestHeHr = newHeHr;
         }
-        return highestHeHrPercentage;
+        return highestHeHr;
     }
 
     public TrimpsSimulation(final Perks perks) {
@@ -112,8 +112,8 @@ public class TrimpsSimulation {
         goldenBought = 0;
     }
 
-    private double getHeHrPercentage() {
-        return (helium / time * 3600) / perks.getSpentHelium();
+    private double getHeHr() {
+        return (helium / time * 3600);
     }
 
     private void startZone() {
@@ -121,7 +121,7 @@ public class TrimpsSimulation {
         mapsRunZone = 0;
         if (zone % goldenFrequency == 0) {
             //TODO code properly
-            if (zone <= 600) {
+            if (zone <= 530) {
                 goldenBought++;
                 goldenHeliumMod += goldenBought / 100d;
             } else {
