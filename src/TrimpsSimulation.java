@@ -35,8 +35,8 @@ public class TrimpsSimulation {
     PopulationManager pM;
 
     public static void main(String[] args) {
-        int[] perks = new int[] { 91, 88, 87, 98, 72500, 41500, 11800, 40803,
-                59, 84, 46 };
+        int[] perks = new int[] { 91, 87, 86, 98, 73400, 40600, 10800,
+                39200, 58, 83, 45 };
         Perks p = new Perks(perks, 15500000000000d);
         TrimpsSimulation tS = new TrimpsSimulation(p);
         double highestHeHr = 0;
