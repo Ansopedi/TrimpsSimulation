@@ -165,6 +165,9 @@ public class TrimpsSimulation {
                 * pM.getDamageFactor() * (1d + 0.2d * mapsRunZone);
         double hp = enemyHealth();
         double damageFactor = damage / hp;
+        if (zone==495){
+            System.out.println(damageFactor);
+        }
         double res = 0;
         for (int x = 0; x<zoneSimulationRepeatAmount;x++){
             res+=runZone(damageFactor);
