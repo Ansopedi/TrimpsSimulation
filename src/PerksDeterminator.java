@@ -8,9 +8,9 @@ public class PerksDeterminator {
     private Perks perks;
 
     public static void main(String[] args) {
-        int[] perkArray = new int[] { 90, 87, 86, 98, 79000, 40600, 10800,
-                39200, 58, 83, 45 };
-        double totalHelium = 17100000000000d;
+        int[] perkArray = new int[] { 92, 86, 87, 99, 81000, 43300, 10500,
+                43400, 59, 86, 46 };
+        double totalHelium = 19000000000000d;
         // TODO check for non-bought ones
         Perks perks = new Perks(perkArray, totalHelium);
         PerksDeterminator pD = new PerksDeterminator(perks);
@@ -47,7 +47,7 @@ public class PerksDeterminator {
                 count++;
             }
             for (SimulationThread sT : threads) {
-                sT.run();
+                sT.start();
             }
             for (int x = 0; x < threads.size(); x++) {
                 try {
@@ -58,9 +58,11 @@ public class PerksDeterminator {
                 }
                 double heHrIncreasePerHelium = threads.get(x)
                         .getHeHrPerHeliumSpent();
+                System.out.println(heHrIncreasePerHelium);
                 int perkPosition = threads.get(x).perkPosition;
                 if (heHrIncreasePerHelium > highestHeHrIncreasePerHelium) {
                     highestHeHrIncreasePerHelium = heHrIncreasePerHelium;
+                    beforeBuyHeHr = threads.get(x).heHr;
                     bestPerk = perkPosition;
                 }
             }
@@ -68,7 +70,6 @@ public class PerksDeterminator {
             if (highestHeHrIncreasePerHelium > 0) {
                 savedPerks.buyPerk(Perk.values()[bestPerk],
                         Perk.values()[bestPerk].levelIncrease);
-                beforeBuyHeHr = threads.get(bestPerk).heHr;
                 perks = savedPerks;
                 printPerksToFile();
             } else {
@@ -127,7 +128,8 @@ public class PerksDeterminator {
         }
 
         private double getHeHrPerHeliumSpent() {
-            return (heHr / heHrBeforeBuy) / buyCost;
+            return (heHr / heHrBeforeBuy) / (perks.getSpentHelium()
+                    / (perks.getSpentHelium() - buyCost));
         }
     }
 }

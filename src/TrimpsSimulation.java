@@ -37,9 +37,10 @@ public class TrimpsSimulation {
     PopulationManager pM;
 
     public static void main(String[] args) {
-        int[] perks = new int[] { 91, 87, 86, 98, 73400, 40600, 10800, 39200,
-                58, 83, 45 };
-        Perks p = new Perks(perks, 15500000000000d);
+        long times = System.nanoTime();
+        int[] perks = new int[] { 91, 87, 87, 99, 84200, 42900, 11100, 43400,
+                59, 85, 46 };
+        Perks p = new Perks(perks, 17100000000000d);
         TrimpsSimulation tS = new TrimpsSimulation(p);
         double highestHeHr = 0;
         while (true) {
@@ -59,6 +60,7 @@ public class TrimpsSimulation {
         System.out.println(tS.time / 3600);
         System.out.println(tS.zone);
         System.out.println(tS.helium);
+        System.out.println((System.nanoTime() - times) / 1000000);
     }
 
     public double runSimulation() {
@@ -163,8 +165,11 @@ public class TrimpsSimulation {
                 * pM.getDamageFactor() * (1d + 0.2d * mapsRunZone);
         double hp = enemyHealth();
         double damageFactor = damage / hp;
-        ZoneSimulation zS = new ZoneSimulation();
-        double res = zS.runZoneSimulation(damageFactor);
+        double res = 0;
+        for (int x = 0; x<zoneSimulationRepeatAmount;x++){
+            res+=runZone(damageFactor);
+        }
+        res/=zoneSimulationRepeatAmount;
         time += res;
         metal += metalMod * res * pM.getPopulation();
         metal += dropMod * 17 * pM.getPopulation();
@@ -248,144 +253,90 @@ public class TrimpsSimulation {
         return mapOffsets.length;
     }
 
-    private class ZoneSimulation {
-        private double accTime = 0;
-        private int runs = 0;
-        private boolean done = false;
-        private final List<ZoneThread> threads = new ArrayList<>();
-
-        public double runZoneSimulation(final double damageFactor) {
-            int threadNumber = 1;
-            for (int x = 0; x < threadNumber; x++) {
-                ZoneThread z = new ZoneThread(damageFactor);
-                threads.add(z);
+    private double runZone(final double damageFactor) {
+        EnemyType[] zoneArray = createZone(Math.min(80,
+                Math.max(0, ((int) ((zone - corruptionStart) / 3)) + 2)));
+        double res = 0;
+        int cell = 1;
+        Random random = new Random();
+        double hp = getHPModifier(cell, zoneArray[cell - 1]);
+        while (cell <= 100) {
+            boolean crit = random.nextDouble() < critChance;
+            double damage = (crit) ? damageFactor * critDamage : damageFactor;
+            damage *= (1 + 0.2 * random.nextDouble());
+            boolean dodge = zoneArray[cell - 1] == EnemyType.AGILITY
+                    && random.nextDouble() < 0.3;
+            if (dodge) {
+                res += attackDelay;
+                continue;
             }
-            for (ZoneThread z: threads){
-                z.start();
-            }
-            for (ZoneThread z: threads){
-                try {
-                    z.join();
-                } catch (InterruptedException e) {
-                    // TODO Auto-generated catch block
-                    e.printStackTrace();
+            if (damage >= hp) {
+                cell++;
+                damage -= hp;
+                double overkillDamage = damage * 0.15;
+                if (cell == 101) {
+                    res += cellDelay;
+                    break;
+                } else {
+                    hp = getHPModifier(cell, zoneArray[cell - 1]);
                 }
-            }
-            return accTime/runs;
-        }
-
-        private synchronized void addRun(final double time) {
-            runs++;
-            accTime += time;
-            if (runs == zoneSimulationRepeatAmount) {
-                for (ZoneThread z : threads) {
-                    z.running = false;
-                }
-            }
-        }
-
-        private class ZoneThread extends Thread {
-            private double damagefactor;
-            private boolean running;
-
-            private ZoneThread(final double damageFactor) {
-                this.damagefactor = damageFactor;
-                running = true;
-            }
-
-            public void run() {  
-                while (running) {
-                    addRun(runZone(damagefactor));
-                }
-            }
-        }
-
-        private double runZone(final double damageFactor) {
-            EnemyType[] zoneArray = createZone(Math.min(80,
-                    Math.max(0, ((int) ((zone - corruptionStart) / 3)) + 2)));
-            double res = 0;
-            int cell = 1;
-            double hp = getHPModifier(cell, zoneArray[cell - 1]);
-            while (cell <= 100) {
-                boolean crit = Math.random() < critChance;
-                double damage = (crit) ? damageFactor * critDamage
-                        : damageFactor;
-                damage *= (1 + 0.2 * Math.random());
-                boolean dodge = zoneArray[cell - 1] == EnemyType.AGILITY
-                        && Math.random() < 0.3;
-                if (dodge) {
-                    res += attackDelay;
-                    continue;
-                }
-                if (damage >= hp) {
+                hp -= overkillDamage;
+                if (hp <= 0) {
                     cell++;
-                    damage -= hp;
-                    double overkillDamage = damage * 0.15;
                     if (cell == 101) {
                         res += cellDelay;
                         break;
                     } else {
+                        res += cellDelay;
                         hp = getHPModifier(cell, zoneArray[cell - 1]);
-                    }
-                    hp -= overkillDamage;
-                    if (hp <= 0) {
-                        cell++;
-                        if (cell == 101) {
-                            res += cellDelay;
-                            break;
-                        } else {
-                            res += cellDelay;
-                            hp = getHPModifier(cell, zoneArray[cell - 1]);
-                        }
-                    } else {
-                        res += attackDelay;
                     }
                 } else {
                     res += attackDelay;
-                    hp -= damage;
                 }
-            }
-            return res;
-        }
-
-        private double getHPModifier(final int pCell,
-                final EnemyType enemyType) {
-            // TODO properly implement
-            if (enemyType == EnemyType.NORMAL) {
-                return 0.01;
-            }
-            double cellMod = (0.5 + 0.8 * (pCell / 100)) / 0.508;
-            if (pCell < 100) {
-                return cellMod * (enemyType == EnemyType.TOUGH ? 5 : 1);
             } else {
-                return cellMod * 6;
+                res += attackDelay;
+                hp -= damage;
             }
         }
+        return res;
+    }
 
-        private EnemyType[] createZone(int numberCorrupted) {
-            int numberNormal = 99 - numberCorrupted;
-            EnemyType[] result = new EnemyType[100];
-            Random random = new Random();
-            result[99] = EnemyType.IMPROBABILITY;
-            for (int x = 0; x < 99; x++) {
-                int r = random.nextInt(numberNormal + numberCorrupted);
-                if (r < numberNormal) {
-                    result[x] = EnemyType.NORMAL;
-                    numberNormal--;
-                } else {
-                    r = random.nextInt(6);
-                    if (r == 0) {
-                        result[x] = EnemyType.TOUGH;
-                    } else if (r == 1) {
-                        result[x] = EnemyType.AGILITY;
-                    } else {
-                        result[x] = EnemyType.COORUPTED;
-                    }
-                    numberCorrupted--;
-                }
-            }
-            return result;
+    private double getHPModifier(final int pCell, final EnemyType enemyType) {
+        // TODO properly implement
+        if (enemyType == EnemyType.NORMAL) {
+            return 0.01;
         }
+        double cellMod = (0.5 + 0.8 * (pCell / 100)) / 0.508;
+        if (pCell < 100) {
+            return cellMod * (enemyType == EnemyType.TOUGH ? 5 : 1);
+        } else {
+            return cellMod * 6;
+        }
+    }
+
+    private EnemyType[] createZone(int numberCorrupted) {
+        int numberNormal = 99 - numberCorrupted;
+        EnemyType[] result = new EnemyType[100];
+        Random random = new Random();
+        result[99] = EnemyType.IMPROBABILITY;
+        for (int x = 0; x < 99; x++) {
+            int r = random.nextInt(numberNormal + numberCorrupted);
+            if (r < numberNormal) {
+                result[x] = EnemyType.NORMAL;
+                numberNormal--;
+            } else {
+                r = random.nextInt(6);
+                if (r == 0) {
+                    result[x] = EnemyType.TOUGH;
+                } else if (r == 1) {
+                    result[x] = EnemyType.AGILITY;
+                } else {
+                    result[x] = EnemyType.COORUPTED;
+                }
+                numberCorrupted--;
+            }
+        }
+        return result;
     }
 
     private enum EnemyType {
