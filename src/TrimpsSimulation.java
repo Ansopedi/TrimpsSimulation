@@ -21,6 +21,7 @@ public class TrimpsSimulation {
     private final static double[] mapOffsets = new double[] { 100, 0.75, 0.5,
             0.2, 0.13, 0.08, 0.05, 0.036, 0.03, 0.0275 };
     private final static int zoneSimulationRepeatAmount = 1000;
+    private final boolean useCache;
     private Perks perks;
     private double goldenHeliumMod;
     private double goldenBattleMod;
@@ -35,8 +36,9 @@ public class TrimpsSimulation {
     private double time;
     private int zone;
     private double metal;
-    EquipmentManager eM;
-    PopulationManager pM;
+    private double corruptMod;
+    private EquipmentManager eM;
+    private PopulationManager pM;
 
 
     private final static double ehInc = 1.005;
@@ -57,10 +59,11 @@ public class TrimpsSimulation {
     
     public static void main(String[] args) {
     	buildExpectedHits(ehMax, ehInc);
-        int[] perks = new int[] { 91, 87, 86, 98, 73400, 40600, 10800, 39200,
-                58, 83, 45 };
-        Perks p = new Perks(perks, 15500000000000d);
-        TrimpsSimulation tS = new TrimpsSimulation(p);
+        long times = System.nanoTime();
+        int[] perks = new int[] { 91, 90, 88, 99, 76400, 48500, 13600, 45600,
+                59, 88, 47 };
+        Perks p = new Perks(perks, 190900000000000d);
+        TrimpsSimulation tS = new TrimpsSimulation(p, false);
         double highestHeHr = 0;
         while (true) {
             tS.startZone();
@@ -79,6 +82,7 @@ public class TrimpsSimulation {
         System.out.println(tS.time / 3600);
         System.out.println(tS.zone);
         System.out.println(tS.helium);
+        System.out.println((System.nanoTime() - times) / 1000000);
     }
     
     private static int getEHidx (double hp) {
@@ -209,7 +213,8 @@ public class TrimpsSimulation {
         return highestHeHr;
     }
 
-    public TrimpsSimulation(final Perks perks) {
+    public TrimpsSimulation(final Perks perks, final boolean useCache) {
+        this.useCache = useCache;
         this.perks = perks;
         int[] perkLevels = perks.getPerkLevels();
         eM = new EquipmentManager(perkLevels[Perk.ARTISANISTRY.ordinal()]);
@@ -242,6 +247,7 @@ public class TrimpsSimulation {
         goldenHeliumMod = 1;
         goldenBattleMod = 1;
         goldenBought = 0;
+        corruptMod = 1;
     }
 
     private double getHeHr() {
@@ -293,8 +299,28 @@ public class TrimpsSimulation {
                 * pM.getDamageFactor() * (1d + 0.2d * mapsRunZone);
         double hp = enemyHealth();
         double damageFactor = damage / hp;
-        ZoneSimulation zS = new ZoneSimulation();
-        double res = zS.runZoneSimulation(damageFactor);
+        double res = 0;
+        if (useCache) {
+            int corrupted = Math.min(80,
+                    Math.max(0, ((int) ((zone - corruptionStart) / 3)) + 2));
+            double cachedValue = SimulationCache.getInstance()
+                    .getValue(corrupted, damageFactor);
+            if (cachedValue == 0) {
+                for (int x = 0; x < zoneSimulationRepeatAmount; x++) {
+                    res += runZone(damageFactor);
+                }
+                res /= zoneSimulationRepeatAmount;
+                SimulationCache.getInstance().setValue(corrupted, damageFactor,
+                        res);
+            } else {
+                res = cachedValue;
+            }
+        } else {
+            for (int x = 0; x < zoneSimulationRepeatAmount; x++) {
+                res += runZone(damageFactor);
+            }
+            res /= zoneSimulationRepeatAmount;
+        }
         time += res;
         metal += metalMod * res * pM.getPopulation();
         metal += dropMod * 17 * pM.getPopulation();
@@ -364,7 +390,8 @@ public class TrimpsSimulation {
             res *= Math.pow(1.1, zone - 59);
         }
         if (zone >= 151) {
-            res *= 10 * Math.pow(1.05, Math.floor((zone - 150) / 6));
+            corruptMod = 10 * Math.pow(1.05, Math.floor((zone - 150) / 6));
+            res *= corruptMod;
         }
         return Math.floor(res);
     }
@@ -377,78 +404,6 @@ public class TrimpsSimulation {
         }
         return mapOffsets.length;
     }
-
-    private class ZoneSimulation {
-        private double accTime = 0;
-        private int runs = 0;
-        //private boolean done = false;
-        private final List<ZoneThread> threads = new ArrayList<>();
-        private double missedOKs;
-        private double extraHits;
-        private double okDmg;
-        private double okCrit;
-        private double okDmgN;
-        private double okCritN;
-        
-        
-        public double runZoneSimulation(final double damageFactor) {
-            int threadNumber = 1;
-            missedOKs = 0;
-            extraHits = 0;
-            okDmg = 0;
-            okCrit = 0;
-            okDmgN = 0;
-            okCritN = 0;
-            for (int x = 0; x < threadNumber; x++) {
-                ZoneThread z = new ZoneThread(damageFactor);
-                threads.add(z);
-            }
-            for (ZoneThread z: threads){
-                z.start();
-            }
-            for (ZoneThread z: threads){
-                try {
-                    z.join();
-                } catch (InterruptedException e) {
-                    // TODO Auto-generated catch block
-                    e.printStackTrace();
-                }
-            }
-            if (damageFactor < 2) {
-            	System.out.println("damageFactor: " + damageFactor);
-            	double estimate = probZoneSim(damageFactor);
-            	System.out.println("okDmg: " + (okDmg/okDmgN) + " okCrit: " + (okCrit/okCritN));
-            	System.out.println("mOK/run: " + (missedOKs/(double) runs) + " extra hits/corrupt: " + (extraHits/(double) runs/(double) getNumCorrupt()));
-            	System.out.format("zone %d time:%nsimulated: %.3f%nestimated: %.3f%n", zone, accTime/(double) runs, estimate);
-            }
-        	return accTime/runs;
-        }
-
-        private synchronized void addRun(final double time) {
-            runs++;
-            accTime += time;
-            if (runs == zoneSimulationRepeatAmount) {
-                for (ZoneThread z : threads) {
-                    z.running = false;
-                }
-            }
-        }
-
-        private class ZoneThread extends Thread {
-            private double damagefactor;
-            private boolean running;
-
-            private ZoneThread(final double damageFactor) {
-                this.damagefactor = damageFactor;
-                running = true;
-            }
-
-            public void run() {  
-                while (running) {
-                    addRun(runZone(damagefactor));
-                }
-            }
-        }
         
         private double probZoneSim(final double damageFactor) {
         	double nCorrupt = (double) getNumCorrupt();
@@ -634,101 +589,132 @@ public class TrimpsSimulation {
         	return Math.min(80, Math.max(0, (int) ((zone - corruptionStart) / 3) + 2));
         }
         
-        private double runZone(final double damageFactor) {
-            EnemyType[] zoneArray = createZone(getNumCorrupt());
-            double res = 0;
-            int cell = 1;
-            double hp = getHPModifier(cell, zoneArray[cell - 1]);
-            while (cell <= 100) {
-                boolean crit = Math.random() < critChance;
-                double damage = (crit) ? damageFactor * critDamage
-                        : damageFactor;
-                damage *= (1 + 0.2 * Math.random());
-                boolean dodge = zoneArray[cell - 1] == EnemyType.AGILITY
-                        && Math.random() < 0.3;
-                if (dodge) {
-                    res += attackDelay;
-                    continue;
+    private double runZone(final double damageFactor) {
+        EnemyType[] zoneArray = createZone(Math.min(80,
+                Math.max(0, ((int) ((zone - corruptionStart) / 3)) + 2)));
+        double res = 0;
+        int cell = 1;
+        Random random = new Random();
+        double hp = getHPModifier(cell, zoneArray[cell - 1])*getHPFactor(zoneArray[cell - 1]);
+        while (cell <= 100) {
+            boolean crit = random.nextDouble() < critChance;
+            double damage = (crit) ? damageFactor * critDamage : damageFactor;
+            damage *= (1 + 0.2 * random.nextDouble());
+            boolean dodge = zoneArray[cell - 1] == EnemyType.AGILITY
+                    && random.nextDouble() < 0.3;
+            if (dodge) {
+                res += attackDelay;
+                continue;
+            }
+            if (damage >= hp) {
+                cell++;
+                damage -= hp;
+                double overkillDamage = damage * 0.15;
+                if (cell == 101) {
+                    res += cellDelay;
+                    break;
+                } else {
+                    hp = getHPModifier(cell, zoneArray[cell - 1])*getHPFactor(zoneArray[cell - 1]);
                 }
-                if (damage >= hp) {
+                hp -= overkillDamage;
+                if (hp <= 0) {
                     cell++;
-                    damage -= hp;
-                    double overkillDamage = damage * okFactor;
-                    if (crit) {
-                    	okCrit += overkillDamage;
-                    	okCritN++;
-                    } else {
-                    	okDmg += overkillDamage;
-                    	okDmgN++;
-                    }
                     if (cell == 101) {
                         res += cellDelay;
                         break;
                     } else {
-                        hp = getHPModifier(cell, zoneArray[cell - 1]);
-                    }
-                    hp -= overkillDamage;
-                    if (hp <= 0) {
-                        cell++;
-                        if (cell == 101) {
-                            res += cellDelay;
-                            break;
-                        } else {
-                            res += cellDelay;
-                            hp = getHPModifier(cell, zoneArray[cell - 1]);
-                        }
-                    } else {
-                    	missedOKs++;
                         res += cellDelay;
+                        hp = getHPModifier(cell, zoneArray[cell - 1])*getHPFactor(zoneArray[cell - 1]);
                     }
                 } else {
-                	extraHits++;
-                    res += attackDelay;
-                    hp -= damage;
+                    res += cellDelay;
                 }
-            }
-            return res;
-        }
-
-        private double getHPModifier(final int pCell,
-                final EnemyType enemyType) {
-            // TODO properly implement
-        	double cellMod = 1;
-            if (enemyType == EnemyType.NORMAL) {
-                cellMod = 1.2 / (10 * Math.pow(1.005,(zone - 150) / 6));
-            }
-            cellMod = (0.5 + 0.8 * (pCell / 100)) / 0.508;
-            if (pCell < 100) {
-                return cellMod * (enemyType == EnemyType.TOUGH ? 5 : 1);
             } else {
-                return cellMod * 6;
+                res += attackDelay;
+                hp -= damage;
             }
         }
+        return res;
+    }
+    //TODO do normal remove better
+    private double getHPModifier(final int pCell, final EnemyType enemyType) {
+        // TODO properly implement
+        if (enemyType == EnemyType.NORMAL) {
+            return 1d/corruptMod;
+        }
+        double cellMod = (0.5 + 0.8 * (pCell / 100)) / 0.508;
+        if (pCell < 100) {
+            return cellMod * (enemyType == EnemyType.TOUGH ? 5 : 1);
+        } else {
+            return cellMod * 6;
+        }
+    }
+    //TODO look over and optimize
+    private double getHPFactor(final EnemyType enemyType) {
+        if (enemyType == EnemyType.COORUPTED) {
+            return 1.0;
+        }
+        Random r = new Random();
+        double mainImpProb = (1 - 0.004666666 - 0.15) / 8;
+        double random = r.nextDouble();
+        if (random < 0.004666666) {
+            return 1.6;
+        }
+        random -= 0.004666666;
+        if (random < 0.15) {
+            return 1;
+        }
+        random -= 0.15;
+        if (random < mainImpProb * 2) {
+            return 0.7;
+        }
+        random -= mainImpProb * 2;
+        if (random < mainImpProb * 2) {
+            return 1.3;
+        }
+        random -= mainImpProb * 2;
+        if (random < mainImpProb) {
+            return 1;
+        }
+        random -= mainImpProb;
+        if (random < mainImpProb) {
+            return 0.8;
+        }
+        random -= mainImpProb;
+        if (random < mainImpProb) {
+            return 1.1;
+        }
+        random -= mainImpProb;
+        if (random < mainImpProb) {
+            return 1.5;
+        }
+        random -= mainImpProb;
+        return 1;
+    }
 
-        private EnemyType[] createZone(int numberCorrupted) {
-            int numberNormal = 99 - numberCorrupted;
-            EnemyType[] result = new EnemyType[100];
-            Random random = new Random();
-            result[99] = EnemyType.IMPROBABILITY;
-            for (int x = 0; x < 99; x++) {
-                int r = random.nextInt(numberNormal + numberCorrupted);
-                if (r < numberNormal) {
-                    result[x] = EnemyType.NORMAL;
-                    numberNormal--;
+    private EnemyType[] createZone(int numberCorrupted) {
+        int numberNormal = 99 - numberCorrupted;
+        EnemyType[] result = new EnemyType[100];
+        Random random = new Random();
+        result[99] = EnemyType.IMPROBABILITY;
+        for (int x = 0; x < 99; x++) {
+            int r = random.nextInt(numberNormal + numberCorrupted);
+            if (r < numberNormal) {
+                result[x] = EnemyType.NORMAL;
+                numberNormal--;
+            } else {
+                r = random.nextInt(6);
+                if (r == 0) {
+                    result[x] = EnemyType.TOUGH;
+                } else if (r == 1) {
+                    result[x] = EnemyType.AGILITY;
                 } else {
-                    r = random.nextInt(6);
-                    if (r == 0) {
-                        result[x] = EnemyType.TOUGH;
-                    } else if (r == 1) {
-                        result[x] = EnemyType.AGILITY;
-                    } else {
-                        result[x] = EnemyType.COORUPTED;
-                    }
-                    numberCorrupted--;
+                    result[x] = EnemyType.COORUPTED;
                 }
+                numberCorrupted--;
             }
-            return result;
         }
+        return result;
     }
 
     private enum EnemyType {
