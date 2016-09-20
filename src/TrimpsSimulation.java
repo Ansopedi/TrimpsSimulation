@@ -19,6 +19,7 @@ public class TrimpsSimulation {
     private final static double[] mapOffsets = new double[] { 100, 0.75, 0.5,
             0.2, 0.13, 0.08, 0.05, 0.036, 0.03, 0.0275 };
     private final static int zoneSimulationRepeatAmount = 1000;
+    private final boolean useCache;
     private Perks perks;
     private double goldenHeliumMod;
     private double goldenBattleMod;
@@ -38,10 +39,10 @@ public class TrimpsSimulation {
 
     public static void main(String[] args) {
         long times = System.nanoTime();
-        int[] perks = new int[] { 91, 87, 87, 99, 84200, 42900, 11100, 43400,
-                59, 85, 46 };
-        Perks p = new Perks(perks, 17100000000000d);
-        TrimpsSimulation tS = new TrimpsSimulation(p);
+        int[] perks = new int[] { 91, 90, 88, 99, 76400, 48500, 13600, 45600,
+                59, 88, 47 };
+        Perks p = new Perks(perks, 18900000000000d);
+        TrimpsSimulation tS = new TrimpsSimulation(p, false);
         double highestHeHr = 0;
         while (true) {
             tS.startZone();
@@ -81,7 +82,8 @@ public class TrimpsSimulation {
         return highestHeHr;
     }
 
-    public TrimpsSimulation(final Perks perks) {
+    public TrimpsSimulation(final Perks perks, final boolean useCache) {
+        this.useCache = useCache;
         this.perks = perks;
         int[] perkLevels = perks.getPerkLevels();
         eM = new EquipmentManager(perkLevels[Perk.ARTISANISTRY.ordinal()]);
@@ -165,14 +167,28 @@ public class TrimpsSimulation {
                 * pM.getDamageFactor() * (1d + 0.2d * mapsRunZone);
         double hp = enemyHealth();
         double damageFactor = damage / hp;
-        if (zone==495){
-            System.out.println(damageFactor);
-        }
         double res = 0;
-        for (int x = 0; x<zoneSimulationRepeatAmount;x++){
-            res+=runZone(damageFactor);
+        if (useCache) {
+            int corrupted = Math.min(80,
+                    Math.max(0, ((int) ((zone - corruptionStart) / 3)) + 2));
+            double cachedValue = SimulationCache.getInstance()
+                    .getValue(corrupted, damageFactor);
+            if (cachedValue == 0) {
+                for (int x = 0; x < zoneSimulationRepeatAmount; x++) {
+                    res += runZone(damageFactor);
+                }
+                res /= zoneSimulationRepeatAmount;
+                SimulationCache.getInstance().setValue(corrupted, damageFactor,
+                        res);
+            } else {
+                res = cachedValue;
+            }
+        } else {
+            for (int x = 0; x < zoneSimulationRepeatAmount; x++) {
+                res += runZone(damageFactor);
+            }
+            res /= zoneSimulationRepeatAmount;
         }
-        res/=zoneSimulationRepeatAmount;
         time += res;
         metal += metalMod * res * pM.getPopulation();
         metal += dropMod * 17 * pM.getPopulation();
@@ -294,7 +310,7 @@ public class TrimpsSimulation {
                         hp = getHPModifier(cell, zoneArray[cell - 1]);
                     }
                 } else {
-                    res += attackDelay;
+                    res += cellDelay;
                 }
             } else {
                 res += attackDelay;

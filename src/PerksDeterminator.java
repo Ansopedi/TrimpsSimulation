@@ -8,9 +8,9 @@ public class PerksDeterminator {
     private Perks perks;
 
     public static void main(String[] args) {
-        int[] perkArray = new int[] { 92, 86, 87, 99, 81000, 43300, 10500,
-                43400, 59, 86, 46 };
-        double totalHelium = 19000000000000d;
+        //TODO fix all 0 bug
+        int[] perkArray = new int[] { 1,0,0,0,0,0,0,0,0,0,0 };
+        double totalHelium = 18900000000000d;
         // TODO check for non-bought ones
         Perks perks = new Perks(perkArray, totalHelium);
         PerksDeterminator pD = new PerksDeterminator(perks);
@@ -28,7 +28,7 @@ public class PerksDeterminator {
 
     public Perks determinePerks() {
         Perks savedPerks = new Perks(perks);
-        TrimpsSimulation tS = new TrimpsSimulation(savedPerks);
+        TrimpsSimulation tS = new TrimpsSimulation(savedPerks,true);
         double beforeBuyHeHr = tS.runSimulation();
         while (true) {
             long time = System.nanoTime();
@@ -123,7 +123,7 @@ public class PerksDeterminator {
         }
 
         public void run() {
-            TrimpsSimulation tS = new TrimpsSimulation(perks);
+            TrimpsSimulation tS = new TrimpsSimulation(perks,true);
             heHr = tS.runSimulation();
         }
 
