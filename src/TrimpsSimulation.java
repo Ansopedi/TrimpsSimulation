@@ -34,14 +34,15 @@ public class TrimpsSimulation {
     private double time;
     private int zone;
     private double metal;
-    EquipmentManager eM;
-    PopulationManager pM;
+    private double corruptMod;
+    private EquipmentManager eM;
+    private PopulationManager pM;
 
     public static void main(String[] args) {
         long times = System.nanoTime();
         int[] perks = new int[] { 91, 90, 88, 99, 76400, 48500, 13600, 45600,
                 59, 88, 47 };
-        Perks p = new Perks(perks, 18900000000000d);
+        Perks p = new Perks(perks, 190900000000000d);
         TrimpsSimulation tS = new TrimpsSimulation(p, false);
         double highestHeHr = 0;
         while (true) {
@@ -116,6 +117,7 @@ public class TrimpsSimulation {
         goldenHeliumMod = 1;
         goldenBattleMod = 1;
         goldenBought = 0;
+        corruptMod = 1;
     }
 
     private double getHeHr() {
@@ -258,7 +260,8 @@ public class TrimpsSimulation {
             res *= Math.pow(1.1, zone - 59);
         }
         if (zone >= 151) {
-            res *= 10 * Math.pow(1.05, Math.floor((zone - 150) / 6));
+            corruptMod = 10 * Math.pow(1.05, Math.floor((zone - 150) / 6));
+            res *= corruptMod;
         }
         return Math.floor(res);
     }
@@ -278,7 +281,7 @@ public class TrimpsSimulation {
         double res = 0;
         int cell = 1;
         Random random = new Random();
-        double hp = getHPModifier(cell, zoneArray[cell - 1]);
+        double hp = getHPModifier(cell, zoneArray[cell - 1])*getHPFactor(zoneArray[cell - 1]);
         while (cell <= 100) {
             boolean crit = random.nextDouble() < critChance;
             double damage = (crit) ? damageFactor * critDamage : damageFactor;
@@ -297,7 +300,7 @@ public class TrimpsSimulation {
                     res += cellDelay;
                     break;
                 } else {
-                    hp = getHPModifier(cell, zoneArray[cell - 1]);
+                    hp = getHPModifier(cell, zoneArray[cell - 1])*getHPFactor(zoneArray[cell - 1]);
                 }
                 hp -= overkillDamage;
                 if (hp <= 0) {
@@ -307,7 +310,7 @@ public class TrimpsSimulation {
                         break;
                     } else {
                         res += cellDelay;
-                        hp = getHPModifier(cell, zoneArray[cell - 1]);
+                        hp = getHPModifier(cell, zoneArray[cell - 1])*getHPFactor(zoneArray[cell - 1]);
                     }
                 } else {
                     res += cellDelay;
@@ -319,11 +322,11 @@ public class TrimpsSimulation {
         }
         return res;
     }
-
+    //TODO do normal remove better
     private double getHPModifier(final int pCell, final EnemyType enemyType) {
         // TODO properly implement
         if (enemyType == EnemyType.NORMAL) {
-            return 0.01;
+            return 1d/corruptMod;
         }
         double cellMod = (0.5 + 0.8 * (pCell / 100)) / 0.508;
         if (pCell < 100) {
@@ -331,6 +334,48 @@ public class TrimpsSimulation {
         } else {
             return cellMod * 6;
         }
+    }
+    //TODO look over and optimize
+    private double getHPFactor(final EnemyType enemyType) {
+        if (enemyType == EnemyType.COORUPTED) {
+            return 1.0;
+        }
+        Random r = new Random();
+        double mainImpProb = (1 - 0.004666666 - 0.15) / 8;
+        double random = r.nextDouble();
+        if (random < 0.004666666) {
+            return 1.6;
+        }
+        random -= 0.004666666;
+        if (random < 0.15) {
+            return 1;
+        }
+        random -= 0.15;
+        if (random < mainImpProb * 2) {
+            return 0.7;
+        }
+        random -= mainImpProb * 2;
+        if (random < mainImpProb * 2) {
+            return 1.3;
+        }
+        random -= mainImpProb * 2;
+        if (random < mainImpProb) {
+            return 1;
+        }
+        random -= mainImpProb;
+        if (random < mainImpProb) {
+            return 0.8;
+        }
+        random -= mainImpProb;
+        if (random < mainImpProb) {
+            return 1.1;
+        }
+        random -= mainImpProb;
+        if (random < mainImpProb) {
+            return 1.5;
+        }
+        random -= mainImpProb;
+        return 1;
     }
 
     private EnemyType[] createZone(int numberCorrupted) {
