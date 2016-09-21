@@ -15,8 +15,6 @@ public class TrimpsSimulation {
     private final static double robotrimpDamage = 7;
     private final static double heirloomMetalDrop = 6.04;
     private final static double heirloomMinerEff = 6.12;
-    private final static double cellDelay = 0.4;
-    private final static double attackDelay = 0.258;
     private final static int corruptionStart = 151;
     private final static double[] mapOffsets = new double[] { 100, 0.75, 0.5,
             0.2, 0.13, 0.08, 0.05, 0.036, 0.03, 0.0275 };
