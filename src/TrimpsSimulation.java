@@ -20,7 +20,6 @@ public class TrimpsSimulation {
     private final static int corruptionStart = 151;
     private final static double[] mapOffsets = new double[] { 100, 0.75, 0.5,
             0.2, 0.13, 0.08, 0.05, 0.036, 0.03, 0.0275 };
-    private final static int zoneSimulationRepeatAmount = 1000;
     private final boolean useCache;
     private Perks perks;
     private double goldenHeliumMod;
@@ -67,7 +66,8 @@ public class TrimpsSimulation {
         int[] perks = new int[] { 91, 90, 88, 99, 76400, 48500, 13600, 45600,
                 59, 88, 47 };
         Perks p = new Perks(perks, 190900000000000d);
-        TrimpsSimulation tS = new TrimpsSimulation(p, false, new AveragedZoneSimulation());
+        TrimpsSimulation tS = new TrimpsSimulation(p, false,
+                new AveragedZoneSimulation());
         double highestHeHr = 0;
         while (true) {
             tS.startZone();
@@ -319,12 +319,9 @@ public class TrimpsSimulation {
             double cachedValue = SimulationCache.getInstance()
                     .getValue(corrupted, damageFactor);
             if (cachedValue == 0) {
-                for (int x = 0; x < zoneSimulationRepeatAmount; x++) {
-                    res += zoneSimulation.getExpectedTime(cellDelay,
-                            attackDelay, damageFactor, critChance, critDamage,
-                            okFactor, corruptMod, corruptionStart, zone);
-                }
-                res /= zoneSimulationRepeatAmount;
+                res = zoneSimulation.getExpectedTime(cellDelay, attackDelay,
+                        damageFactor, critChance, critDamage, okFactor,
+                        corruptMod, corruptionStart, zone);
                 SimulationCache.getInstance().setValue(corrupted, damageFactor,
                         res);
             } else {
@@ -332,12 +329,9 @@ public class TrimpsSimulation {
             }
         } else {
             // zoneStats = new double[100][10];
-            for (int x = 0; x < zoneSimulationRepeatAmount; x++) {
-                res += zoneSimulation.getExpectedTime(cellDelay,
-                        attackDelay, damageFactor, critChance, critDamage,
-                        okFactor, corruptMod, corruptionStart, zone);
-            }
-            res /= zoneSimulationRepeatAmount;
+            res = zoneSimulation.getExpectedTime(cellDelay, attackDelay,
+                    damageFactor, critChance, critDamage, okFactor, corruptMod,
+                    corruptionStart, zone);
             if (damageFactor < 10) {
                 double estimate = probZoneSim(damageFactor);
                 for (int i = 0; i < 100; i++) {
@@ -350,10 +344,6 @@ public class TrimpsSimulation {
                     // zoneStats[i][5]/zoneSimulationRepeatAmount,
                     // zoneStats[i][6]/zoneSimulationRepeatAmount);
                 }
-                System.out.format("zone %d, damageFactor=%.3f%n", zone,
-                        damageFactor);
-                System.out.format("simulated=%.2f, estimated=%.2f%n", res,
-                        estimate);
             }
         }
         time += res;

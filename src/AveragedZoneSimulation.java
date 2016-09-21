@@ -2,75 +2,85 @@ import java.util.Random;
 
 public class AveragedZoneSimulation extends ZoneSimulation {
 
+    private final static int zoneSimulationRepeatAmount = 1000;
+
     @Override
     public double getExpectedTime(final double cellDelay,
             final double attackDelay, final double damageFactor,
             final double critChance, final double critDamage,
             final double okFactor, final double corruptMod,
-            final int corruptionStart, final int zone){
-        EnemyType[] zoneArray = createZone(Math.min(80,
-                Math.max(0, ((int) ((zone - corruptionStart) / 3)) + 2)));
-        double res = 0;
-        int cell = 1;
-        Random random = new Random();
-        double hp = getHPModifier(cell, zoneArray[cell - 1],corruptMod)
-                * getHPFactor(zoneArray[cell - 1], random.nextDouble());
-        while (cell <= 100) {
-            // +1 hit
-            // zoneStats[cell-1][0] += 1;
-            boolean crit = random.nextDouble() < critChance;
-            double damage = (crit) ? damageFactor * critDamage : damageFactor;
-            damage *= (1 + 0.2 * random.nextDouble());
-            boolean dodge = zoneArray[cell - 1] == EnemyType.AGILITY
-                    && random.nextDouble() < 0.3;
-            if (dodge) {
-                res += attackDelay;
-                continue;
-            }
-            if (damage >= hp) {
-                cell++;
-                damage -= hp;
-                double overkillDamage = damage * okFactor;
-                // +OK dmg
-                // zoneStats[cell-2][crit ? 5 : 3] += 1;
-                // zoneStats[cell-2][crit ? 4 : 2] += overkillDamage;
-                if (cell == 101) {
-                    res += cellDelay;
-                    break;
-                } else {
-                    hp = getHPModifier(cell, zoneArray[cell - 1],corruptMod) * getHPFactor(
-                            zoneArray[cell - 1], random.nextDouble());
+            final int corruptionStart, final int zone) {
+        double acc = 0;
+        for (int x = 0; x < zoneSimulationRepeatAmount; x++) {
+            EnemyType[] zoneArray = createZone(Math.min(80,
+                    Math.max(0, ((int) ((zone - corruptionStart) / 3)) + 2)));
+            double res = 0;
+            int cell = 1;
+            Random random = new Random();
+            double hp = getHPModifier(cell, zoneArray[cell - 1], corruptMod)
+                    * getHPFactor(zoneArray[cell - 1], random.nextDouble());
+            while (cell <= 100) {
+                // +1 hit
+                // zoneStats[cell-1][0] += 1;
+                boolean crit = random.nextDouble() < critChance;
+                double damage = (crit) ? damageFactor * critDamage
+                        : damageFactor;
+                damage *= (1 + 0.2 * random.nextDouble());
+                boolean dodge = zoneArray[cell - 1] == EnemyType.AGILITY
+                        && random.nextDouble() < 0.3;
+                if (dodge) {
+                    res += attackDelay;
+                    continue;
                 }
-                hp -= overkillDamage;
-                if (hp <= 0) {
-                    // overkilled this cell, so next cell is fresh
-                    // zoneStats[cell-1][6] += 1;
+                if (damage >= hp) {
                     cell++;
+                    damage -= hp;
+                    double overkillDamage = damage * okFactor;
+                    // +OK dmg
+                    // zoneStats[cell-2][crit ? 5 : 3] += 1;
+                    // zoneStats[cell-2][crit ? 4 : 2] += overkillDamage;
                     if (cell == 101) {
                         res += cellDelay;
                         break;
                     } else {
-                        res += cellDelay;
-                        hp = getHPModifier(cell, zoneArray[cell - 1],corruptMod)
+                        hp = getHPModifier(cell, zoneArray[cell - 1],
+                                corruptMod)
                                 * getHPFactor(zoneArray[cell - 1],
                                         random.nextDouble());
                     }
+                    hp -= overkillDamage;
+                    if (hp <= 0) {
+                        // overkilled this cell, so next cell is fresh
+                        // zoneStats[cell-1][6] += 1;
+                        cell++;
+                        if (cell == 101) {
+                            res += cellDelay;
+                            break;
+                        } else {
+                            res += cellDelay;
+                            hp = getHPModifier(cell, zoneArray[cell - 1],
+                                    corruptMod)
+                                    * getHPFactor(zoneArray[cell - 1],
+                                            random.nextDouble());
+                        }
+                    } else {
+                        // didn't overkill, so count this cell for expHits
+                        // zoneStats[cell-1][1] += 1;
+                        res += cellDelay;
+                    }
                 } else {
-                    // didn't overkill, so count this cell for expHits
-                    // zoneStats[cell-1][1] += 1;
-                    res += cellDelay;
+                    res += attackDelay;
+                    hp -= damage;
                 }
-            } else {
-                res += attackDelay;
-                hp -= damage;
             }
+            acc += res;
         }
-        return res;
+        return acc/zoneSimulationRepeatAmount;
     }
 
     // TODO do normal remove better
-    private double getHPModifier(final double pCell,
-            final EnemyType enemyType, final double corruptMod) {
+    private double getHPModifier(final double pCell, final EnemyType enemyType,
+            final double corruptMod) {
         // TODO properly implement
         double cellMod = (0.5 + 0.8 * (pCell / 100d)) / 0.508;
         if (enemyType == EnemyType.NORMAL) {

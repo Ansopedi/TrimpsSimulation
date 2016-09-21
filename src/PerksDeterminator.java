@@ -29,7 +29,7 @@ public class PerksDeterminator {
 
     public Perks determinePerks() {
         Perks savedPerks = new Perks(perks);
-        TrimpsSimulation tS = new TrimpsSimulation(savedPerks,true, new AveragedZoneSimulation());
+        TrimpsSimulation tS = new TrimpsSimulation(savedPerks,false, new AveragedZoneSimulation());
         double beforeBuyHeHr = tS.runSimulation();
         while (true) {
             long time = System.nanoTime();
