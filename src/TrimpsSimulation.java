@@ -51,6 +51,8 @@ public class TrimpsSimulation {
     private final static double[] expPn = new double[ehLength];
     private final static double[] expPc = new double[ehLength];
     
+    //private double[][] zoneStats = new double[100][10];
+    
     private final static int dodgeLength = 20;
     private final static double expectedDodges = calculateExpectedDodges(dodgeLength);
     
@@ -316,10 +318,21 @@ public class TrimpsSimulation {
                 res = cachedValue;
             }
         } else {
+            //zoneStats = new double[100][10];
             for (int x = 0; x < zoneSimulationRepeatAmount; x++) {
                 res += runZone(damageFactor);
             }
             res /= zoneSimulationRepeatAmount;
+            if (damageFactor < 10) {
+            	double estimate = probZoneSim(damageFactor);
+            	for (int i = 0; i < 100; i++) {
+            		//System.out.format("sim cell %d stats: eH=%.2f eOK=%.3f pN=%.3f eOKc=%.2f pC=%.2f fresh=%.2f%n",
+            			//	i+1, zoneStats[i][0]/zoneStats[i][1], zoneStats[i][2]/zoneStats[i][3], zoneStats[i][3]/zoneSimulationRepeatAmount,
+            				//zoneStats[i][4]/zoneStats[i][5], zoneStats[i][5]/zoneSimulationRepeatAmount, zoneStats[i][6]/zoneSimulationRepeatAmount);
+            	}
+            	System.out.format("zone %d, damageFactor=%.3f%n", zone, damageFactor);
+            	System.out.format("simulated=%.2f, estimated=%.2f%n", res, estimate);
+            }
         }
         time += res;
         metal += metalMod * res * pM.getPopulation();
@@ -405,190 +418,190 @@ public class TrimpsSimulation {
         return mapOffsets.length;
     }
         
-        private double probZoneSim(final double damageFactor) {
-        	double nCorrupt = (double) getNumCorrupt();
-        	double corrRows = Math.min(10, Math.ceil(nCorrupt/6d));
-        	double baseHp = 1 / (.508 * damageFactor);
-        	double pCorr = nCorrupt / Math.min(corrRows * 10d,99);
-        	
-        	// expHits, expOK, expOKc, expPn, expPc, freshness (chance of a fresh cell, i.e. first cell of zone or previous cell was OKd)
-        	double[] cellStats = { 0, 0, 0, 0, 0, 1 };
-        	double[] tmp = { 0, 0, 0, 0, 0, 0 };
-        	
-        	double zoneTime = 0;
-        	
-        	for (int cell = 1; cell <= 100; cell++) {
-        		double hpC = baseHp * (.5 + .8 * cell/100d);
-        		// TODO model normal HP enemies during Corrupted challenge? may also need this in getEnemyHealth?
-        		double hpN = hpC * 1.2 / (10 * Math.pow(1.005,(zone - 150) / 6));
-        		double pCorrFinal = (cell == 100) ? 1 : (Math.ceil(cell / 10d) <= corrRows) ? pCorr : 0;
-        		double freshness = cellStats[5]; // this cell's freshness is used to weight the results between the staleSim and freshSim
+    private double probZoneSim(final double damageFactor) {
+    	double nCorrupt = (double) getNumCorrupt();
+    	double corrRows = Math.min(10, Math.ceil(nCorrupt/6d));
+    	double baseHp = 1 / (.508 * damageFactor);
+    	double pCorr = nCorrupt / Math.min(corrRows * 10d,99);
+    	
+    	// expHits, expOK, expOKc, expPn, expPc, freshness (chance of a fresh cell, i.e. first cell of zone or previous cell was OKd)
+    	double[] cellStats = { 0, 0, 0, 0, 0, 1 };
+    	double[] tmp = { 0, 0, 0, 0, 0, 0 };
+    	
+    	double zoneTime = 0;
+    	
+    	for (int cell = 1; cell <= 100; cell++) {
+    		double hpC = baseHp * (.5 + .8 * cell/100d);
+    		// TODO model normal HP enemies during Corrupted challenge? may also need this in getEnemyHealth?
+    		double hpN = hpC * 1.2 / (10 * Math.pow(1.05,(zone - 150) / 6));
+    		double pCorrFinal = (cell == 100) ? 1 : (Math.ceil(cell / 10d) <= corrRows) ? pCorr : 0;
+    		double freshness = cellStats[5]; // this cell's freshness is used to weight the results between the staleSim and freshSim
 
-        		// stats if cell is stale (including freshness of next cell)
-        		if (freshness < 1) {
-        			cellStats = staleSim(pCorrFinal, hpC, hpN, cellStats);
-        		}
-            	
-        		// stats if cell is fresh
-            	if (freshness > 0) {
-            		System.arraycopy(freshSim(pCorrFinal, hpC, hpN), 0, tmp, 0, 5);
-            	}
-        		tmp[5] = 0; // next cell can't be fresh if this one was fresh (except in the negligible event that we exactly kill the cell with no OK dmg)
-
-        		// avg together stale and fresh stats
-        		staleAvg(cellStats, (1 - freshness), tmp, freshness);
-        		
-        		
-        		// if next cell is fresh, this cell adds no time (because it was overkilled)
-        		// else add celltime for the first hit, and hittime for each subsequent hit
-        		double cellTime = (1 - cellStats[5]) * (cellDelay + (cellStats[0] - 1) * attackDelay);
-        		zoneTime += (1 - cellStats[5]) * (cellDelay + (cellStats[0] - 1) * attackDelay);
-            	System.out.format("cell %d stats: time=%.2f hpC=%.3f hpN=%.3f eH=%.2f eOK=%.3f pN=%.3f eOKc=%.2f pC=%.2f fresh=%.2f" + "%n", 
-            			cell, cellTime, hpC, hpN, cellStats[0], cellStats[1], cellStats[3], cellStats[2], cellStats[4], cellStats[5]);
+    		// stats if cell is stale (including freshness of next cell)
+    		if (freshness < 1) {
+    			cellStats = staleSim(pCorrFinal, hpC, hpN, cellStats);
+    		}
+        	
+    		// stats if cell is fresh
+        	if (freshness > 0) {
+        		System.arraycopy(freshSim(pCorrFinal, hpC, hpN), 0, tmp, 0, 5);
         	}
-        	//System.out.format("est zone %d time: %.3fsec%n", zone, zoneTime);
-        	return zoneTime;
-        }
-        
-        // helper for averaging together results for staleSim
-        // we only generate OK stats for the next cell when we don't overkill this cell, so ignore results where this cell is overkilled
-        // same for expected hits to kill this cell: if it's overkilled we don't care, we add no time for the cell
-        private void staleAvg(double[] res, double wRes, double[] tmp, double wTmp) {
-        	double freshTmp = res[5] * wRes + tmp[5] * wTmp; // freshness is weighted normally since it applies to all cases
+    		tmp[5] = 0; // next cell can't be fresh if this one was fresh (except in the negligible event that we exactly kill the cell with no OK dmg)
 
-        	// hits are reweighted by the likelihood of NOT overkilling the current cell - if we OK we just count zero time
+    		// avg together stale and fresh stats
+    		staleAvg(cellStats, (1 - freshness), tmp, freshness);
     		
-        	// reweight by freshness
-        	wRes *= 1 - res[5];
-        	wTmp *= 1 - tmp[5];
-        	double total = wRes + wTmp;
-        	if (total > 0) {
-        		wRes /= total;
-        		wTmp /= total;
-        	} else if (freshTmp < 1) {
-        		System.out.format("fresh=%.3f wRes=%.3f wTmp=%.3f" + "%n", freshTmp, wRes, wTmp);
-        		throw new Error("We don't expect staleAvg to produce garbage results unless the next cell is guaranteed to be fresh.");
-        	}
-        	
-    		weightedAvg(res, wRes, tmp, wTmp, 5);
-    		res[5] = freshTmp;
-        }
-        
-        // simulate results for a stale cell: apply overkill damage, then generate stats if not dead
-        private double[] staleSim(double pCorr, double hpC, double hpN, double[] stats) {
-        	double[] res = { 0, 0, 0, 0, 0, 0 };
-        	double[] tmp = { 0, 0, 0, 0, 0, 0 };
-        	final double[] ok = { 0, 0, 0, 0, 0, 1 }; // constant to use when we OK a cell;
-        	
-        	// improb
-        	if (pCorr == 1d) {
-        		// last hit was normal
-        		if (hpC * 6 - stats[1] <= 0) {
-        			System.arraycopy(ok, 0, res, 0, 6);
-        		} else {
-        			res[5] = 0;
-        			System.arraycopy(calcEH(hpC * 6 - stats[1]), 0, res, 0, 5);
-        		}
-        		// last hit was crit
-        		if (hpC * 6 - stats[3] <= 0) {
-        			System.arraycopy(ok, 0, tmp, 0, 6);
-        		} else {
-        			tmp[5] = 0;
-        			System.arraycopy(calcEH(hpC * 6 - stats[3]), 0, tmp, 0, 5);
-        		}
-        		// avg together results for crit & noncrit
-        		staleAvg(res, stats[2], tmp, stats[4]);
-        		return res;
-        	}
-        	
-        	// normal hits
-        	
-        	// tough
-        	if (hpC * 5 - stats[1] <= 0) {
-        		System.arraycopy(ok, 0, res, 0, 6);
-        	} else {
-        		res[5] = 0;
-        		System.arraycopy(calcEH(hpC * 6 - stats[1]), 0, res, 0, 5);
-        	}
-        	// nontough corrupt
-        	if (hpC - stats[1] <= 0) {
-        		System.arraycopy(ok, 0, tmp, 0, 6);
-        	} else {
-        		tmp[5] = 0;
-        		System.arraycopy(calcEH(hpC - stats[1]), 0, tmp, 0, 5);
-        		tmp[0] *= 1 + expectedDodges / 5d;
-        	}
-        	staleAvg(res, 1/6d, tmp, 5/6d);
-        	// normal enemy
-        	if (hpN - stats[1] <= 0) {
-        		System.arraycopy(ok, 0, tmp, 0, 6);
-        	} else {
-        		tmp[5] = 0;
-        		System.arraycopy(calcEH(hpN - stats[1]), 0, tmp, 0, 5);
-        	}
-        	staleAvg(res, pCorr, tmp, (1 - pCorr));
-        	
+    		
+    		// if next cell is fresh, this cell adds no time (because it was overkilled)
+    		// else add celltime for the first hit, and hittime for each subsequent hit
+    		double cellTime = (1 - cellStats[5]) * (cellDelay + (cellStats[0] - 1) * attackDelay);
+    		zoneTime += (1 - cellStats[5]) * (cellDelay + (cellStats[0] - 1) * attackDelay);
+        	//System.out.format("cell %d stats: time=%.2f hpC=%.3f hpN=%.3f eH=%.2f eOK=%.3f pN=%.3f eOKc=%.2f pC=%.2f fresh=%.2f" + "%n", 
+        	//		cell, cellTime, hpC, hpN, cellStats[0], cellStats[1], cellStats[3], cellStats[2], cellStats[4], cellStats[5]);
+    	}
+    	//System.out.format("est zone %d time: %.3fsec%n", zone, zoneTime);
+    	return zoneTime;
+    }
+    
+    // helper for averaging together results for staleSim
+    // we only generate OK stats for the next cell when we don't overkill this cell, so ignore results where this cell is overkilled
+    // same for expected hits to kill this cell: if it's overkilled we don't care, we add no time for the cell
+    private void staleAvg(double[] res, double wRes, double[] tmp, double wTmp) {
+    	double freshTmp = res[5] * wRes + tmp[5] * wTmp; // freshness is weighted normally since it applies to all cases
 
-        	// crits
+    	// hits are reweighted by the likelihood of NOT overkilling the current cell - if we OK we just count zero time
+		
+    	// reweight by freshness
+    	wRes *= 1 - res[5];
+    	wTmp *= 1 - tmp[5];
+    	double total = wRes + wTmp;
+    	if (total > 0) {
+    		wRes /= total;
+    		wTmp /= total;
+    	} else if (freshTmp < 1) {
+    		System.out.format("fresh=%.3f wRes=%.3f wTmp=%.3f" + "%n", freshTmp, wRes, wTmp);
+    		throw new Error("We don't expect staleAvg to produce garbage results unless the next cell is guaranteed to be fresh.");
+    	}
+    	
+		weightedAvg(res, wRes, tmp, wTmp, 5);
+		res[5] = freshTmp;
+    }
+    
+    // simulate results for a stale cell: apply overkill damage, then generate stats if not dead
+    private double[] staleSim(double pCorr, double hpC, double hpN, double[] stats) {
+    	double[] res = { 0, 0, 0, 0, 0, 0 };
+    	double[] tmp = { 0, 0, 0, 0, 0, 0 };
+    	final double[] ok = { 0, 0, 0, 0, 0, 1 }; // constant to use when we OK a cell;
+    	
+    	// improb
+    	if (pCorr == 1d) {
+    		// last hit was normal
+    		if (hpC * 6 - stats[1] <= 0) {
+    			System.arraycopy(ok, 0, res, 0, 6);
+    		} else {
+    			res[5] = 0;
+    			System.arraycopy(calcEH(hpC * 6 - stats[1]), 0, res, 0, 5);
+    		}
+    		// last hit was crit
+    		if (hpC * 6 - stats[3] <= 0) {
+    			System.arraycopy(ok, 0, tmp, 0, 6);
+    		} else {
+    			tmp[5] = 0;
+    			System.arraycopy(calcEH(hpC * 6 - stats[3]), 0, tmp, 0, 5);
+    		}
+    		// avg together results for crit & noncrit
+    		staleAvg(res, stats[2], tmp, stats[4]);
+    		return res;
+    	}
+    	
+    	// normal hits
+    	
+    	// tough
+    	if (hpC * 5 - stats[1] <= 0) {
+    		System.arraycopy(ok, 0, res, 0, 6);
+    	} else {
+    		res[5] = 0;
+    		System.arraycopy(calcEH(hpC * 6 - stats[1]), 0, res, 0, 5);
+    	}
+    	// nontough corrupt
+    	if (hpC - stats[1] <= 0) {
+    		System.arraycopy(ok, 0, tmp, 0, 6);
+    	} else {
+    		tmp[5] = 0;
+    		System.arraycopy(calcEH(hpC - stats[1]), 0, tmp, 0, 5);
+    		tmp[0] *= 1 + expectedDodges / 5d;
+    	}
+    	staleAvg(res, 1/6d, tmp, 5/6d);
+    	// normal enemy
+    	if (hpN - stats[1] <= 0) {
+    		System.arraycopy(ok, 0, tmp, 0, 6);
+    	} else {
+    		tmp[5] = 0;
+    		System.arraycopy(calcEH(hpN - stats[1]), 0, tmp, 0, 5);
+    	}
+    	staleAvg(res, pCorr, tmp, (1 - pCorr));
+    	
 
-        	double[] cRes = { 0, 0, 0, 0, 0, 0 };
-        	
-        	// tough
-        	if (hpC * 5 - stats[2] <= 0) {
-        		System.arraycopy(ok, 0, cRes, 0, 6);
-        	} else {
-        		cRes[5] = 0;
-        		System.arraycopy(calcEH(hpC * 5 - stats[2]), 0, cRes, 0, 5);
-        	}
-        	// nontough corrupt
-        	if (hpC - stats[2] <= 0) {
-        		System.arraycopy(ok, 0, tmp, 0, 6);
-        	} else {
-        		tmp[5] = 0;
-        		System.arraycopy(calcEH(hpC - stats[2]), 0, tmp, 0, 5);
-        		tmp[0] *= 1 + expectedDodges / 5d;
-        	}
-        	staleAvg(cRes, 1/6d, tmp, 5/6d);
-        	// normal enemy
-        	if (hpN - stats[2] <= 0) {
-        		System.arraycopy(ok, 0, tmp, 0, 6);
-        	} else {
-        		tmp[5] = 0;
-        		System.arraycopy(calcEH(hpN - stats[2]), 0, tmp, 0, 5);
-        	}
-        	staleAvg(cRes, pCorr, tmp, (1 - pCorr));
-        	
-        	staleAvg(res, stats[3], cRes, stats[4]);
-        	
-        	return res;
-        }
-        
-        // simulate results for a fresh cell
-        private double[] freshSim(double pCorr, double hpC, double hpN) {
-        	double[] res = { 0, 0, 0, 0, 0 };
-        	double[] tmp = { 0, 0, 0, 0, 0 };
-        	if (pCorr == 1d) { //improb
-        		res = calcEH(hpC * 6);
-        	} else {
-        		// tough imp
-        		res = calcEH(hpC * 5);
-        		// nontough corrupted imp
-        		tmp = calcEH(hpC);
-        		// add dodges for 1/5 of non-tough corrupted imps
-        		tmp[0] *= 1 + expectedDodges / 5d;
-        		// average tough with nontough
-        		weightedAvg(res, 1/6d, tmp, 5/6d, 5);
-        		// average with normal imp
-        		tmp = calcEH(hpN);
-        		weightedAvg(res, pCorr, tmp, (1 - pCorr), 5);
-        	}
-        	return res;
-        }        
+    	// crits
 
-        private int getNumCorrupt() {
-        	return Math.min(80, Math.max(0, (int) ((zone - corruptionStart) / 3) + 2));
-        }
-        
+    	double[] cRes = { 0, 0, 0, 0, 0, 0 };
+    	
+    	// tough
+    	if (hpC * 5 - stats[2] <= 0) {
+    		System.arraycopy(ok, 0, cRes, 0, 6);
+    	} else {
+    		cRes[5] = 0;
+    		System.arraycopy(calcEH(hpC * 5 - stats[2]), 0, cRes, 0, 5);
+    	}
+    	// nontough corrupt
+    	if (hpC - stats[2] <= 0) {
+    		System.arraycopy(ok, 0, tmp, 0, 6);
+    	} else {
+    		tmp[5] = 0;
+    		System.arraycopy(calcEH(hpC - stats[2]), 0, tmp, 0, 5);
+    		tmp[0] *= 1 + expectedDodges / 5d;
+    	}
+    	staleAvg(cRes, 1/6d, tmp, 5/6d);
+    	// normal enemy
+    	if (hpN - stats[2] <= 0) {
+    		System.arraycopy(ok, 0, tmp, 0, 6);
+    	} else {
+    		tmp[5] = 0;
+    		System.arraycopy(calcEH(hpN - stats[2]), 0, tmp, 0, 5);
+    	}
+    	staleAvg(cRes, pCorr, tmp, (1 - pCorr));
+    	
+    	staleAvg(res, stats[3], cRes, stats[4]);
+    	
+    	return res;
+    }
+    
+    // simulate results for a fresh cell
+    private double[] freshSim(double pCorr, double hpC, double hpN) {
+    	double[] res = { 0, 0, 0, 0, 0 };
+    	double[] tmp = { 0, 0, 0, 0, 0 };
+    	if (pCorr == 1d) { //improb
+    		res = calcEH(hpC * 6);
+    	} else {
+    		// tough imp
+    		res = calcEH(hpC * 5);
+    		// nontough corrupted imp
+    		tmp = calcEH(hpC);
+    		// add dodges for 1/5 of non-tough corrupted imps
+    		tmp[0] *= 1 + expectedDodges / 5d;
+    		// average tough with nontough
+    		weightedAvg(res, 1/6d, tmp, 5/6d, 5);
+    		// average with normal imp
+    		tmp = calcEH(hpN);
+    		weightedAvg(res, pCorr, tmp, (1 - pCorr), 5);
+    	}
+    	return res;
+    }        
+
+    private int getNumCorrupt() {
+    	return Math.min(80, Math.max(0, (int) ((zone - corruptionStart) / 3) + 2));
+    }
+    
     private double runZone(final double damageFactor) {
         EnemyType[] zoneArray = createZone(Math.min(80,
                 Math.max(0, ((int) ((zone - corruptionStart) / 3)) + 2)));
@@ -597,6 +610,8 @@ public class TrimpsSimulation {
         Random random = new Random();
         double hp = getHPModifier(cell, zoneArray[cell - 1])*getHPFactor(zoneArray[cell - 1]);
         while (cell <= 100) {
+        	// +1 hit
+        	//zoneStats[cell-1][0] += 1;
             boolean crit = random.nextDouble() < critChance;
             double damage = (crit) ? damageFactor * critDamage : damageFactor;
             damage *= (1 + 0.2 * random.nextDouble());
@@ -609,7 +624,10 @@ public class TrimpsSimulation {
             if (damage >= hp) {
                 cell++;
                 damage -= hp;
-                double overkillDamage = damage * 0.15;
+                double overkillDamage = damage * okFactor;
+                // +OK dmg
+                //zoneStats[cell-2][crit ? 5 : 3] += 1;
+                //zoneStats[cell-2][crit ? 4 : 2] += overkillDamage;
                 if (cell == 101) {
                     res += cellDelay;
                     break;
@@ -618,6 +636,8 @@ public class TrimpsSimulation {
                 }
                 hp -= overkillDamage;
                 if (hp <= 0) {
+                	// overkilled this cell, so next cell is fresh
+                	//zoneStats[cell-1][6] += 1;
                     cell++;
                     if (cell == 101) {
                         res += cellDelay;
@@ -627,6 +647,8 @@ public class TrimpsSimulation {
                         hp = getHPModifier(cell, zoneArray[cell - 1])*getHPFactor(zoneArray[cell - 1]);
                     }
                 } else {
+                	// didn't overkill, so count this cell for expHits
+                	//zoneStats[cell-1][1] += 1;
                     res += cellDelay;
                 }
             } else {
@@ -639,10 +661,10 @@ public class TrimpsSimulation {
     //TODO do normal remove better
     private double getHPModifier(final int pCell, final EnemyType enemyType) {
         // TODO properly implement
+        double cellMod = (0.5 + 0.8 * (pCell / 100d)) / 0.508;
         if (enemyType == EnemyType.NORMAL) {
-            return 1d/corruptMod;
+            return cellMod/corruptMod;
         }
-        double cellMod = (0.5 + 0.8 * (pCell / 100)) / 0.508;
         if (pCell < 100) {
             return cellMod * (enemyType == EnemyType.TOUGH ? 5 : 1);
         } else {
@@ -651,7 +673,7 @@ public class TrimpsSimulation {
     }
     //TODO look over and optimize
     private double getHPFactor(final EnemyType enemyType) {
-        if (enemyType == EnemyType.COORUPTED) {
+        if (enemyType != EnemyType.NORMAL) {
             return 1.0;
         }
         Random r = new Random();
