@@ -9,6 +9,8 @@ public class TrimpsSimulation {
     private final static int blacksmitheryZone = 284;
     private final static double critChance = 0.726;
     private final static double critDamage = 13.7;
+    private final static double cellDelay = 0.4;
+    private final static double attackDelay = 0.258;
     private final static double okFactor = 0.15;
     private final static double achievementDamage = 13.577;
     private final static double heirloomDamage = 5.7;

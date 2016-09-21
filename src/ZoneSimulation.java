@@ -1,8 +1,9 @@
 
 public abstract class ZoneSimulation {
-    private final static double cellDelay = 0.4;
-    private final static double attackDelay = 0.258;
-    
-    public abstract double getExpectedTime(final double damageFactor, final double critChance, final double critDamage, final int zone);
-    
+
+    public abstract double getExpectedTime(final double cellDelay,
+            final double attackDelay, final double damageFactor,
+            final double critChance, final double critDamage,
+            final double oKFactor, final int zone);
+
 }
