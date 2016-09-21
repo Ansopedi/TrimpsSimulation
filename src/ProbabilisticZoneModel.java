@@ -1,5 +1,5 @@
 
-public class ProbabilisticZoneSimulation extends ZoneSimulation {
+public class ProbabilisticZoneModel extends ZoneSimulation {
 	
 	private static double critChance;
 	private static double critDamage;
@@ -37,7 +37,7 @@ public class ProbabilisticZoneSimulation extends ZoneSimulation {
     
     // crit chance & damage;
     
-    public ProbabilisticZoneSimulation(final double pCrit, final double dCrit, final double okF) {
+    public ProbabilisticZoneModel(final double pCrit, final double dCrit, final double okF) {
     	critChance = pCrit;
     	critDamage = dCrit;
     	okFactor = okF;

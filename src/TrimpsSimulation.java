@@ -51,7 +51,7 @@ public class TrimpsSimulation {
         Perks p = new Perks(perks, 22000000000000d);
         TrimpsSimulation tS = new TrimpsSimulation(p, false,
                 //new AveragedZoneSimulation());
-        		new ProbabilisticZoneSimulation(critChance, critDamage, okFactor));
+        		new ProbabilisticZoneModel(critChance, critDamage, okFactor));
         double highestHeHr = 0;
         while (true) {
             tS.startZone();
