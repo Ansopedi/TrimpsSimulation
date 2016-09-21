@@ -7,8 +7,7 @@ public class AveragedZoneSimulation extends ZoneSimulation {
             final double attackDelay, final double damageFactor,
             final double critChance, final double critDamage,
             final double okFactor, final double corruptMod,
-            final int corruptionStart, final int zone) {
-
+            final int corruptionStart, final int zone){
         EnemyType[] zoneArray = createZone(Math.min(80,
                 Math.max(0, ((int) ((zone - corruptionStart) / 3)) + 2)));
         double res = 0;
