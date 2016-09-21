@@ -637,7 +637,7 @@ public class TrimpsSimulation {
         return res;
     }
     //TODO do normal remove better
-    private double getHPModifier(final int pCell, final EnemyType enemyType) {
+    private double getHPModifier(final double pCell, final EnemyType enemyType) {
         // TODO properly implement
         if (enemyType == EnemyType.NORMAL) {
             return 1d/corruptMod;
