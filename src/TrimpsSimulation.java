@@ -609,7 +609,7 @@ public class TrimpsSimulation {
             if (damage >= hp) {
                 cell++;
                 damage -= hp;
-                double overkillDamage = damage * 0.15;
+                double overkillDamage = damage * okFactor;
                 if (cell == 101) {
                     res += cellDelay;
                     break;
