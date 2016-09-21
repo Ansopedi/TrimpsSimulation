@@ -9,8 +9,9 @@ public class PerksDeterminator {
 
     public static void main(String[] args) {
         //TODO fix all 0 bug
-        int[] perkArray = new int[] { 1,0,0,0,0,0,0,0,0,0,0 };
-        double totalHelium = 18900000000000d;
+        int[] perkArray = new int[] 
+                {80,80,80,90,40000,20000,9000,27000,60,80,44};
+        double totalHelium = 22000000000000d;
         // TODO check for non-bought ones
         Perks perks = new Perks(perkArray, totalHelium);
         PerksDeterminator pD = new PerksDeterminator(perks);
@@ -28,7 +29,7 @@ public class PerksDeterminator {
 
     public Perks determinePerks() {
         Perks savedPerks = new Perks(perks);
-        TrimpsSimulation tS = new TrimpsSimulation(savedPerks,true);
+        TrimpsSimulation tS = new TrimpsSimulation(savedPerks,false, new AveragedZoneSimulation());
         double beforeBuyHeHr = tS.runSimulation();
         while (true) {
             long time = System.nanoTime();
@@ -78,6 +79,28 @@ public class PerksDeterminator {
         }
         return perks;
     }
+    
+    private void comparePow(){
+        Perks perks = new Perks(new int[]{0,0,0,0,0,0,0,0,0,0,0},1000000000000000000d);
+        int pow1 = 0;
+        int pow2 = 0;
+        double comCost = 0;
+        while (pow2<=100000){
+            double pow1eff = (1+(pow1+1)*0.05)*(1+0.01*pow2)/(comCost+perks.perkCost(Perk.POWER, 1));
+            double pow2eff = (1+pow1*0.05)*(1+0.01*(pow2+1))/(comCost+perks.perkCost(Perk.POWER2, 1));
+            if (pow1eff>pow2eff){
+                comCost+=perks.perkCost(Perk.POWER, 1);
+                perks.buyPerk(Perk.POWER, 1);
+                pow1++;
+                System.out.println(pow2);
+            }
+            else{
+                comCost+=perks.perkCost(Perk.POWER2, 1);
+                perks.buyPerk(Perk.POWER2, 1);
+                pow2++;
+            }
+        }
+    }
 
     private void printPerksToFile() {
         PrintWriter writer = null;
@@ -123,7 +146,7 @@ public class PerksDeterminator {
         }
 
         public void run() {
-            TrimpsSimulation tS = new TrimpsSimulation(perks,true);
+            TrimpsSimulation tS = new TrimpsSimulation(perks,false, new AveragedZoneSimulation());
             heHr = tS.runSimulation();
         }
 
