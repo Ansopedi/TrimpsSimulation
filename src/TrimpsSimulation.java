@@ -5,19 +5,19 @@ import java.util.List;
 
 public class TrimpsSimulation {
 
-    private final static int goldenFrequency = 30;
-    private final static int blacksmitheryZone = 284;
-    private final static double critChance = 0.726;
-    private final static double critDamage = 13.7;
-    private final static double cellDelay = 0.4;
-    private final static double attackDelay = 0.258;
-    private final static double okFactor = 0.15;
-    private final static double achievementDamage = 13.577;
-    private final static double heirloomDamage = 5.7;
-    private final static double robotrimpDamage = 7;
-    private final static double heirloomMetalDrop = 6.04;
-    private final static double heirloomMinerEff = 6.12;
-    private final static int corruptionStart = 151;
+    public final static int goldenFrequency = 30;
+    public final static int blacksmitheryZone = 284;
+    public final static double critChance = 0.726;
+    public final static double critDamage = 13.7;
+    public final static double cellDelay = 0.4;
+    public final static double attackDelay = 0.258;
+    public final static double okFactor = 0.15;
+    public final static double achievementDamage = 13.577;
+    public final static double heirloomDamage = 5.7;
+    public final static double robotrimpDamage = 7;
+    public final static double heirloomMetalDrop = 6.04;
+    public final static double heirloomMinerEff = 6.12;
+    public final static int corruptionStart = 151;
     private final static double[] mapOffsets = new double[] { 100, 0.75, 0.5,
             0.2, 0.13, 0.08, 0.05, 0.036, 0.03, 0.0275 };
     private final boolean useCache;
@@ -46,9 +46,8 @@ public class TrimpsSimulation {
 
     public static void main(String[] args) {
         long times = System.nanoTime();
-        int[] perks = new int[] { 95, 91, 87, 100, 87000, 43000, 15000, 49000,
-                60, 88, 53 };
-        Perks p = new Perks(perks, 22000000000000d);
+        int[] perks = new int[] {97,94,85,97,188000,94000,9000,27000,59,86,56};
+        Perks p = new Perks(perks, 22200000000000d);
         TrimpsSimulation tS = new TrimpsSimulation(p, false,
                 //new AveragedZoneSimulation());
         		new ProbabilisticZoneModel(critChance, critDamage, okFactor));
