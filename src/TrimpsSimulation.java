@@ -595,7 +595,7 @@ public class TrimpsSimulation {
         double res = 0;
         int cell = 1;
         Random random = new Random();
-        double hp = getHPModifier(cell, zoneArray[cell - 1])*getHPFactor(zoneArray[cell - 1]);
+        double hp = getHPModifier(cell, zoneArray[cell - 1])*getHPFactor(zoneArray[cell - 1],random.nextDouble());
         while (cell <= 100) {
             boolean crit = random.nextDouble() < critChance;
             double damage = (crit) ? damageFactor * critDamage : damageFactor;
@@ -614,7 +614,7 @@ public class TrimpsSimulation {
                     res += cellDelay;
                     break;
                 } else {
-                    hp = getHPModifier(cell, zoneArray[cell - 1])*getHPFactor(zoneArray[cell - 1]);
+                    hp = getHPModifier(cell, zoneArray[cell - 1])*getHPFactor(zoneArray[cell - 1],random.nextDouble());
                 }
                 hp -= overkillDamage;
                 if (hp <= 0) {
@@ -624,7 +624,7 @@ public class TrimpsSimulation {
                         break;
                     } else {
                         res += cellDelay;
-                        hp = getHPModifier(cell, zoneArray[cell - 1])*getHPFactor(zoneArray[cell - 1]);
+                        hp = getHPModifier(cell, zoneArray[cell - 1])*getHPFactor(zoneArray[cell - 1],random.nextDouble());
                     }
                 } else {
                     res += cellDelay;
@@ -650,45 +650,44 @@ public class TrimpsSimulation {
         }
     }
     //TODO look over and optimize
-    private double getHPFactor(final EnemyType enemyType) {
+    private double getHPFactor(final EnemyType enemyType, final double random) {
         if (enemyType == EnemyType.COORUPTED) {
             return 1.0;
         }
-        Random r = new Random();
+        double r = random;
         double mainImpProb = (1 - 0.004666666 - 0.15) / 8;
-        double random = r.nextDouble();
-        if (random < 0.004666666) {
+        if (r < 0.004666666) {
             return 1.6;
         }
-        random -= 0.004666666;
-        if (random < 0.15) {
+        r -= 0.004666666;
+        if (r < 0.15) {
             return 1;
         }
-        random -= 0.15;
-        if (random < mainImpProb * 2) {
+        r -= 0.15;
+        if (r < mainImpProb * 2) {
             return 0.7;
         }
-        random -= mainImpProb * 2;
-        if (random < mainImpProb * 2) {
+        r -= mainImpProb * 2;
+        if (r < mainImpProb * 2) {
             return 1.3;
         }
-        random -= mainImpProb * 2;
-        if (random < mainImpProb) {
+        r -= mainImpProb * 2;
+        if (r < mainImpProb) {
             return 1;
         }
-        random -= mainImpProb;
-        if (random < mainImpProb) {
+        r -= mainImpProb;
+        if (r < mainImpProb) {
             return 0.8;
         }
-        random -= mainImpProb;
-        if (random < mainImpProb) {
+        r -= mainImpProb;
+        if (r < mainImpProb) {
             return 1.1;
         }
-        random -= mainImpProb;
-        if (random < mainImpProb) {
+        r -= mainImpProb;
+        if (r < mainImpProb) {
             return 1.5;
         }
-        random -= mainImpProb;
+        r -= mainImpProb;
         return 1;
     }
 
