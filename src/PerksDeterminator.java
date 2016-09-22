@@ -29,12 +29,7 @@ public class PerksDeterminator {
 
     public Perks determinePerks() {
         Perks savedPerks = new Perks(perks);
-        //TrimpsSimulation tS = new TrimpsSimulation(savedPerks,false, new AveragedZoneSimulation());
-        ZoneSimulation zS = new ProbabilisticZoneModel(
-				TrimpsSimulation.critChance, 
-				TrimpsSimulation.critDamage, 
-				TrimpsSimulation.okFactor);
-        TrimpsSimulation tS = new TrimpsSimulation(savedPerks,false,zS);
+        TrimpsSimulation tS = new TrimpsSimulation(savedPerks,false, new AveragedZoneSimulation());
          SimulationResult sR = tS.runSimulation();
          double beforeBuyHeHrOverTime = getHeHrOverTime(tS.runSimulation());
         while (true) {
@@ -48,9 +43,7 @@ public class PerksDeterminator {
                 if (usePerks.buyPerk(p, p.levelIncrease)) {
                     SimulationThread sT = new SimulationThread(usePerks, count,
                             beforeBuyHeHrOverTime,
-                            savedPerks.perkCost(p, p.levelIncrease)
-                            ,zS
-                            );
+                            savedPerks.perkCost(p, p.levelIncrease));
                     threads.add(sT);
                 }
                 count++;
@@ -147,22 +140,18 @@ public class PerksDeterminator {
         private int perkPosition;
         private double heHrOverTimeBeforeBuy;
         private double buyCost;
-        ZoneSimulation zS;
         SimulationResult sR;
 
         public SimulationThread(final Perks perks, final int perkPosition,
-                final double heHrOverTimeBeforeBuy, final double buyCost
-                ,final ZoneSimulation zS
-                ) {
+                final double heHrOverTimeBeforeBuy, final double buyCost) {
             this.perks = perks;
             this.perkPosition = perkPosition;
             this.heHrOverTimeBeforeBuy = heHrOverTimeBeforeBuy;
             this.buyCost = buyCost;
-            this.zS = zS;
         }
 
         public void run() {
-            TrimpsSimulation tS = new TrimpsSimulation(perks,false, zS);
+            TrimpsSimulation tS = new TrimpsSimulation(perks,false, new AveragedZoneSimulation());
             sR = tS.runSimulation();
         }
 
