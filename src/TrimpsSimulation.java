@@ -46,7 +46,7 @@ public class TrimpsSimulation {
 
     public static void main(String[] args) {
         long times = System.nanoTime();
-        int[] perks = new int[] {97,94,85,97,188000,94000,9000,27000,59,86,56};
+        int[] perks = new int[] {94,89,88,101,72000,30000,14000,52000,60,85,47};
         Perks p = new Perks(perks, 22200000000000d);
         TrimpsSimulation tS = new TrimpsSimulation(p, false,
                 //new AveragedZoneSimulation());
@@ -89,7 +89,7 @@ public class TrimpsSimulation {
             }
             highestHeHr = newHeHr;
         }
-        return new SimulationResult(getHeHr()/perks.getSpentHelium(),time,perks);
+        return new SimulationResult(helium,time/3600,perks);
     }
 
     public TrimpsSimulation(final Perks perks, final boolean useCache,

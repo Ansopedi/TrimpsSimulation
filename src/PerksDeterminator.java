@@ -29,22 +29,20 @@ public class PerksDeterminator {
 
     public Perks determinePerks() {
         Perks savedPerks = new Perks(perks);
-        ZoneSimulation zS = new AveragedZoneSimulation();
-        TrimpsSimulation tS = new TrimpsSimulation(savedPerks,false,zS);
-         SimulationResult sR = tS.runSimulation();
-         double beforeBuyHeHrOverTime = getHeHrOverTime(tS.runSimulation());
+        ZoneSimulation zS = new ProbabilisticZoneModel(TrimpsSimulation.critChance, TrimpsSimulation.critDamage, TrimpsSimulation.okFactor);
+        TrimpsSimulation tS = new TrimpsSimulation(perks,false, zS);
+        SimulationResult prev = tS.runSimulation();
         while (true) {
             long time = System.nanoTime();
             int bestPerk = 0;
             int count = 0;
-            double highestHeHrIncreasePerHelium = 0;
+            double highestRunEfficiency = 0;
             List<SimulationThread> threads = new ArrayList<>();
             for (Perk p : Perk.values()) {
                 Perks usePerks = new Perks(savedPerks);
                 if (usePerks.buyPerk(p, p.levelIncrease)) {
                     SimulationThread sT = new SimulationThread(usePerks, count,
-                            beforeBuyHeHrOverTime,
-                            savedPerks.perkCost(p, p.levelIncrease),zS);
+                            zS,prev);
                     threads.add(sT);
                 }
                 count++;
@@ -59,18 +57,17 @@ public class PerksDeterminator {
                     // TODO Auto-generated catch block
                     e.printStackTrace();
                 }
-                double heHrIncreasePerHelium = threads.get(x)
-                        .getHeHrOverTimePerHeliumSpent();
-                System.out.println(heHrIncreasePerHelium);
+                double runEfficiency = threads.get(x).getRelativeEfficiency();
+                System.out.println(runEfficiency);
                 int perkPosition = threads.get(x).perkPosition;
-                if (heHrIncreasePerHelium > highestHeHrIncreasePerHelium) {
-                    highestHeHrIncreasePerHelium = heHrIncreasePerHelium;
-                    beforeBuyHeHrOverTime = getHeHrOverTime(threads.get(x).sR);
+                if (runEfficiency > highestRunEfficiency) {
+                    prev = threads.get(x).sR;
+                    highestRunEfficiency = runEfficiency;
                     bestPerk = perkPosition;
                 }
             }
             System.out.println((System.nanoTime() - time) / 1000000);
-            if (highestHeHrIncreasePerHelium > 0) {
+            if (highestRunEfficiency > 0) {
                 savedPerks.buyPerk(Perk.values()[bestPerk],
                         Perk.values()[bestPerk].levelIncrease);
                 perks = savedPerks;
@@ -129,38 +126,40 @@ public class PerksDeterminator {
         writer.println(sB.toString());
         writer.close();
     }
-    
-    
-    private double getHeHrOverTime(final SimulationResult sR){
-        return sR.perks.getSpentHelium()*Math.pow((1+sR.heHrPercentage*(sR.time/3600)),(1/(sR.time/3600)));
-    }
 
     public class SimulationThread extends Thread {
 
         private Perks perks;
         private int perkPosition;
-        private double heHrOverTimeBeforeBuy;
-        private double buyCost;
         private SimulationResult sR;
+        private SimulationResult prev;
         private ZoneSimulation zS;
 
         public SimulationThread(final Perks perks, final int perkPosition,
-                final double heHrOverTimeBeforeBuy, final double buyCost, final ZoneSimulation zS) {
+                 final ZoneSimulation zS, final SimulationResult prev) {
             this.perks = perks;
             this.perkPosition = perkPosition;
-            this.heHrOverTimeBeforeBuy = heHrOverTimeBeforeBuy;
-            this.buyCost = buyCost;
             this.zS = zS;
+            this.prev = prev;
         }
 
         public void run() {
             TrimpsSimulation tS = new TrimpsSimulation(perks,false, zS);
             sR = tS.runSimulation();
         }
-
-        private double getHeHrOverTimePerHeliumSpent() {
-            return (getHeHrOverTime(sR) / heHrOverTimeBeforeBuy) / (perks.getSpentHelium()
-                    / (perks.getSpentHelium() - buyCost));
+        
+        private double getRelativeEfficiency(){
+            return logOfBase(sR.perks.getSpentHelium()/prev.perks.getSpentHelium(),getRunEfficiency(sR)/getRunEfficiency(prev));
         }
+        
+        
+        private double getRunEfficiency(final SimulationResult sR){
+            return sR.perks.getSpentHelium()*Math.pow(1+sR.helium/sR.perks.getSpentHelium(), 24/sR.hours);
+        }
+        
+        private double logOfBase(double base, double num) {
+            return Math.log(num) / Math.log(base);
+        }
+
     }
 }
