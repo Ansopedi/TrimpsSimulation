@@ -89,7 +89,7 @@ public class TrimpsSimulation {
             }
             highestHeHr = newHeHr;
         }
-        return new SimulationResult(getHeHr(),time);
+        return new SimulationResult(getHeHr()/perks.getSpentHelium(),time,perks);
     }
 
     public TrimpsSimulation(final Perks perks, final boolean useCache,
