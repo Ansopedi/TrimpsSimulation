@@ -131,7 +131,7 @@ public class PerksDeterminator {
     
     
     private double getHeHrOverTime(final SimulationResult sR){
-        return Math.pow((1+sR.heHr*sR.time),(1/sR.time));
+        return Math.pow((1+sR.heHr*sR.time),(24/sR.time));
     }
 
     public class SimulationThread extends Thread {
