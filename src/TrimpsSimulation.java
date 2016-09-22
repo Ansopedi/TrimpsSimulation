@@ -46,8 +46,8 @@ public class TrimpsSimulation {
 
     public static void main(String[] args) {
         long times = System.nanoTime();
-        int[] perks = new int[] {94,89,88,101,72000,30000,14000,52000,60,85,47};
-        Perks p = new Perks(perks, 22200000000000d);
+        int[] perks = new int[] {93,87,88,101,67300,47600,16800,56700,59,86,45};
+        Perks p = new Perks(perks, 24900000000000d);
         TrimpsSimulation tS = new TrimpsSimulation(p, false,
                 //new AveragedZoneSimulation());
         		new ProbabilisticZoneModel(critChance, critDamage, okFactor));
