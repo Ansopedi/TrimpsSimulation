@@ -29,7 +29,12 @@ public class PerksDeterminator {
 
     public Perks determinePerks() {
         Perks savedPerks = new Perks(perks);
-        ZoneSimulation zS = new AveragedZoneSimulation();
+        //ZoneSimulation zS = new AveragedZoneSimulation();
+        ZoneSimulation zS = new ProbabilisticZoneModel(
+        		TrimpsSimulation.critChance,
+        		TrimpsSimulation.critDamage,
+        		TrimpsSimulation.okFactor
+        		);
         TrimpsSimulation tS = new TrimpsSimulation(savedPerks,false,zS);
          SimulationResult sR = tS.runSimulation();
          double beforeBuyHeHrOverTime = getHeHrOverTime(tS.runSimulation());

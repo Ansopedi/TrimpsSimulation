@@ -8,7 +8,7 @@ public class ProbabilisticZoneModel extends ZoneSimulation {
 	// Expected Hits table - holds static stats for the expected result of a cell with a given relative HP (compared to trimp attack)
 	
 	// geometric increment for expHits indices
-    private final static double ehInc = 1.005;
+    private final static double ehInc = 1.003;
     // top end of expHits table - should be high enough that oscillations in Pn and Pc have damped out
     private final static double ehMaxFactor = 200;
     private static double ehMax;
@@ -28,10 +28,6 @@ public class ProbabilisticZoneModel extends ZoneSimulation {
     private static double[] expPn;
     private static double[] expPc;
     
-    // expected dodges per hit for dodge imps
-    private final static int dodgeLength = 20;
-    private static double expectedDodges;
-    
     // average trimp damage per hit
     private static double damagePerHit;
     
@@ -43,7 +39,6 @@ public class ProbabilisticZoneModel extends ZoneSimulation {
     	okFactor = okF;
     	
     	damagePerHit = (critDamage * critChance) + (1 - critChance);
-    	expectedDodges = calculateExpectedDodges(dodgeLength);
     	ehMax = ehMaxFactor * critDamage;
     	ehLength = getEHidx(ehMax) + 1;
     	ehProgress = 0;
@@ -59,7 +54,7 @@ public class ProbabilisticZoneModel extends ZoneSimulation {
     
     // get the expHits table index corresponding to a given relative imp HP
     private static int getEHidx(double hp) {
-        return (int) (Math.log(hp * Math.pow(ehInc, .01)) / Math.log(ehInc));
+        return (int) (Math.log(hp * Math.pow(ehInc, .000001)) / Math.log(ehInc));
     }
 
     // utility method for compiling a weighted average of two arrays
@@ -70,18 +65,6 @@ public class ProbabilisticZoneModel extends ZoneSimulation {
         }
     }
     
-    // calculate the expected # of dodges per hit against a dodge imp
-    private static double calculateExpectedDodges(final int length) {
-        double res = 0;
-        double cumChance = 0.7;
-        for (int hits = 1; hits < length; hits++) {
-            // System.out.println(res + " expected dodges for hit " + (hits-1));
-            cumChance *= 0.3;
-            res += cumChance;
-        }
-        return res;
-    }
-
     // build the expHits table that holds stats for quickly getting calcEH values during zone sims
     private static void buildExpectedHits(double max, double inc) {
         for (double hp = 1; hp < max; hp *= inc) {
@@ -182,7 +165,7 @@ public class ProbabilisticZoneModel extends ZoneSimulation {
 	@Override
 	public double getExpectedTime(double cellDelay, double attackDelay, double damageFactor, double critChance,
 			double critDamage, double okFactor, double corruptMod, int corruptionStart, int zone) {
-        double nCorrupt = (double) getNumCorrupt(zone, corruptionStart);
+        double nCorrupt = (double) TrimpsSimulation.getNumCorrupt(zone, corruptionStart);
         double corrRows = Math.min(10, Math.ceil(nCorrupt / 6d));
         double baseHp = 1 / (.508 * damageFactor);
         double pCorr = nCorrupt / Math.min(corrRows * 10d, 99);
@@ -230,10 +213,9 @@ public class ProbabilisticZoneModel extends ZoneSimulation {
             double cellTime = (1 - cellStats[5])
                     * (cellDelay + (cellStats[0] - 1) * attackDelay);
             zoneTime += cellTime;
-            // System.out.format("cell %d stats: time=%.2f hpC=%.3f hpN=%.3f
-            // eH=%.2f eOK=%.3f pN=%.3f eOKc=%.2f pC=%.2f fresh=%.2f" + "%n",
-            // cell, cellTime, hpC, hpN, cellStats[0], cellStats[1],
-            // cellStats[3], cellStats[2], cellStats[4], cellStats[5]);
+//             System.out.format("cell %d stats: time=%.4f hpC=%.3f hpN=%.3f eH=%.2f eOK=%.3f pN=%.3f eOKc=%.2f pC=%.2f fresh=%.2f" + "%n",
+//             cell, cellTime, hpC, hpN, cellStats[0], cellStats[1],
+//             cellStats[3], cellStats[2], cellStats[4], cellStats[5]);
         }
         // System.out.format("est zone %d time: %.3fsec%n", zone, zoneTime);
         return zoneTime;
@@ -297,7 +279,7 @@ public class ProbabilisticZoneModel extends ZoneSimulation {
                 System.arraycopy(calcEH(hpC * 6 - stats[3]), 0, tmp, 0, 5);
             }
             // avg together results for crit & noncrit
-            staleAvg(res, stats[2], tmp, stats[4]);
+            staleAvg(res, stats[3], tmp, stats[4]);
             return res;
         }
 
@@ -308,7 +290,7 @@ public class ProbabilisticZoneModel extends ZoneSimulation {
             System.arraycopy(ok, 0, res, 0, 6);
         } else {
             res[5] = 0;
-            System.arraycopy(calcEH(hpC * 6 - stats[1]), 0, res, 0, 5);
+            System.arraycopy(calcEH(hpC * 5 - stats[1]), 0, res, 0, 5);
         }
         // nontough corrupt
         if (hpC - stats[1] <= 0) {
@@ -316,7 +298,7 @@ public class ProbabilisticZoneModel extends ZoneSimulation {
         } else {
             tmp[5] = 0;
             System.arraycopy(calcEH(hpC - stats[1]), 0, tmp, 0, 5);
-            tmp[0] *= 1 + expectedDodges / 5d;
+            tmp[0] *= 1 + TrimpsSimulation.expectedDodges / 5d;
         }
         staleAvg(res, 1 / 6d, tmp, 5 / 6d);
         // normal enemy
@@ -345,7 +327,7 @@ public class ProbabilisticZoneModel extends ZoneSimulation {
         } else {
             tmp[5] = 0;
             System.arraycopy(calcEH(hpC - stats[2]), 0, tmp, 0, 5);
-            tmp[0] *= 1 + expectedDodges / 5d;
+            tmp[0] *= 1 + TrimpsSimulation.expectedDodges / 5d;
         }
         staleAvg(cRes, 1 / 6d, tmp, 5 / 6d);
         // normal enemy
@@ -374,7 +356,7 @@ public class ProbabilisticZoneModel extends ZoneSimulation {
             // nontough corrupted imp
             tmp = calcEH(hpC);
             // add dodges for 1/5 of non-tough corrupted imps
-            tmp[0] *= 1 + expectedDodges / 5d;
+            tmp[0] *= 1 + TrimpsSimulation.expectedDodges / 5d;
             // average tough with nontough
             weightedAvg(res, 1 / 6d, tmp, 5 / 6d, 5);
             // average with normal imp
@@ -382,11 +364,6 @@ public class ProbabilisticZoneModel extends ZoneSimulation {
             weightedAvg(res, pCorr, tmp, (1 - pCorr), 5);
         }
         return res;
-    }
-
-    private int getNumCorrupt(int zone, int corruptionStart) {
-        return Math.min(80,
-                Math.max(0, (int) ((zone - corruptionStart) / 3) + 2));
     }
 
 }
