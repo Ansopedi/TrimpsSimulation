@@ -14,6 +14,15 @@ public class Perks {
         }
     }
     
+    public Perks(final int[] perks) {
+    	this.helium = 0;
+    	this.perks = new int[Perk.values().length];
+    	for (int i = 0; i < Perk.values().length; i++) {
+    		this.totalHelium += perkCost(Perk.values()[i],perks[i]);
+    		this.perks[i] = perks[i];
+    	}
+    }
+    
     public Perks(final Perks perks){
         this.totalHelium = perks.totalHelium;
         this.helium = perks.helium;

@@ -18,8 +18,10 @@ public class TrimpsSimulation {
     public final static double heirloomMetalDrop = 6.04;
     public final static double heirloomMinerEff = 6.12;
     public final static int corruptionStart = 151;
+    public final static boolean optimizeMaps = true;
     private final static double[] mapOffsets = new double[] { 100, 0.75, 0.5,
             0.2, 0.13, 0.08, 0.05, 0.036, 0.03, 0.0275 };
+    private final static int minEquip = 5; // 5=polearm, 3=mace, 1=dagger, etc
     private final boolean useCache;
     private Perks perks;
     private double goldenHeliumMod;
@@ -39,49 +41,36 @@ public class TrimpsSimulation {
     private EquipmentManager eM;
     private PopulationManager pM;
     private ZoneSimulation zoneSimulation;
-
-
+    
+    // expected dodges per hit for dodge imps
+    private final static int dodgeLength = 20;
+    public static double expectedDodges = calculateExpectedDodges(dodgeLength);
 
     // private double[][] zoneStats = new double[100][10];
-
     public static void main(String[] args) {
         long times = System.nanoTime();
-        int[] perks = new int[] {93,87,88,101,67300,47600,16800,56700,59,86,45};
-        Perks p = new Perks(perks, 24900000000000d);
+        int[] perks = new int[] {92,88,89,101,77100,47300,17000,55600,59,86,44};
+        Perks p = new Perks(perks);
         TrimpsSimulation tS = new TrimpsSimulation(p, false,
                 //new AveragedZoneSimulation());
         		new ProbabilisticZoneModel(critChance, critDamage, okFactor));
         double highestHeHr = 0;
-        while (true) {
-            tS.startZone();
-            tS.pM.buyCoordinations();
-            tS.doMapsAndBuyStuff();
-            tS.pM.buyCoordinations();
-            tS.doZone();
-            tS.endZone();
-            double newHeHr = tS.getHeHr();
-            if (newHeHr < highestHeHr) {
-                break;
-            }
-            highestHeHr = newHeHr;
-        }
-        System.out.println(highestHeHr);
-        System.out.println(tS.time / 3600);
-        System.out.println(tS.zone);
-        System.out.println(tS.helium);
-        System.out.println((System.nanoTime() - times) / 1000000);
+        SimulationResult sR = tS.runSimulation();
+        System.out.format("Result: zone=%d time=%.3fhr hehr%%=%.3f simtime=%dms%n",
+        		sR.zone, sR.hours, 100d * sR.helium / p.getSpentHelium() / sR.hours,
+        		(System.nanoTime() - times) / 1000000l);
     }
-
-
 
     public SimulationResult runSimulation() {
         double highestHeHr = 0;
         while (true) {
             startZone();
             pM.buyCoordinations();
-            doMapsAndBuyStuff();
-            pM.buyCoordinations();
-            doZone();
+            doMapsAndBuyStuff(); // true=optimize maps by doing test sims, false=use fixed grid based on damageFactor
+            if (!optimizeMaps) {
+            	pM.buyCoordinations();
+            	doZone();
+            }
             endZone();
             double newHeHr = getHeHr();
             if (newHeHr < highestHeHr) {
@@ -89,7 +78,7 @@ public class TrimpsSimulation {
             }
             highestHeHr = newHeHr;
         }
-        return new SimulationResult(helium,time/3600,perks);
+        return new SimulationResult(helium,time/3600,perks,zone);
     }
 
     public TrimpsSimulation(final Perks perks, final boolean useCache,
@@ -131,13 +120,24 @@ public class TrimpsSimulation {
         this.zoneSimulation = zoneSimulation;
     }
 
+    // calculate the expected # of dodges per hit against a dodge imp
+    private static double calculateExpectedDodges(final int length) {
+        double res = 0;
+        double cumChance = 0.7;
+        for (int hits = 1; hits < length; hits++) {
+            // System.out.println(res + " expected dodges for hit " + (hits-1));
+            cumChance *= 0.3;
+            res += cumChance;
+        }
+        return res;
+    }
+    
     private double getHeHr() {
         return (helium / time * 3600);
     }
 
     private void startZone() {
         zone++;
-        mapsRunZone = 0;
         if (zone % goldenFrequency == 0) {
             // TODO code properly
             if (zone <= 530) {
@@ -155,35 +155,126 @@ public class TrimpsSimulation {
     }
 
     private void doMapsAndBuyStuff() {
-        double damage = damageMod * goldenBattleMod * eM.gerTotalDamage()
-                * pM.getDamageFactor();
+
         double hp = enemyHealth();
-        double damageFactor = damage / hp;
-        int mapsToRun = mapsToRun(damageFactor);
-        if (mapsToRun > 0) {
-            for (int x = 0; x < mapsToRun; x++) {
-                eM.dropMap(zone, blacksmitheryZone);
-            }
-            mapsRunZone = mapsToRun;
-            time += cellDelay * 13 * mapsToRun;
-            metal += jCMod * 5 * (26 / 33.33 * mapsToRun) * 1.5
-                    * pM.getPopulation()
-                    + jCMod * 45 / 6 * (26 / 33.33 * mapsToRun) * 1.5
-                            * pM.getPopulation();
+        
+        if (optimizeMaps) {
+	        buyStuff();
+	        // todo: optimize upper bound for map checking, probably don't need to check all the way up to 10
+	        eM.save();
+	        pM.save();
+	        double SVmetal = metal;
+	        double mapTime = 0;
+	        double bestTime = Double.POSITIVE_INFINITY;
+	        double bestZoneTime = 0;
+	        int maps = 0;
+
+            double damage = damageMod * goldenBattleMod * eM.getTotalDamage()
+                    * pM.getDamageFactor();
+            double improbHP = hp / .508 * 1.3 * 6;
+            int minMaps = Math.max(mapsRunZone - 2,0);
+	        minMaps += ((damage - improbHP) * okFactor < improbHP) ? 1 : 0;
+	        while (maps < minMaps) {
+	        	mapTime += runMap();
+	        	maps++;
+	        }
+	        mapsRunZone = maps;
+	        if (minMaps == 0) { // this means we are guaranteed 100% overkill, so just calculate the min zone time and be done
+	        	bestZoneTime = minZoneTime();
+	        	bestTime = bestZoneTime;
+	        } else {
+	        	while (maps < minMaps + 6) {
+		        	if (maps > minMaps) { 
+		        		mapTime += runMap(); 
+		        	}
+		            damage = damageMod * goldenBattleMod * eM.getTotalDamage()
+		                    * pM.getDamageFactor() * (1d + 0.2d * maps);
+		            double damageFactor = damage / hp;
+		            double zoneTime = zoneSimulation.getExpectedTime(cellDelay, attackDelay,
+		                    damageFactor, critChance, critDamage, okFactor, corruptMod,
+		                    corruptionStart, zone);
+		            double totTime = zoneTime + mapTime;
+		            if (totTime < bestTime) {
+		            	bestTime = totTime;
+		            	bestZoneTime = zoneTime;
+		            	eM.save();
+		            	pM.save();
+		            	SVmetal = metal;
+		            	mapsRunZone = maps;
+		            }
+		            maps++;
+		        }
+		        eM.restore();
+		        pM.restore();
+		        metal = SVmetal;
+	        }
+	        time += bestTime;
+	        addZoneProduction(bestZoneTime);
+	        //System.out.format("Zone %d, ran %d maps, total time %.2f%n", zone, mapsRunZone, bestTime);
+        } else {
+
+        	mapsRunZone = 0;
+            double damage = damageMod * goldenBattleMod * eM.getTotalDamage()
+                    * pM.getDamageFactor();
+            double damageFactor = damage / hp;
+            
+	        int mapsToRun = mapsToRun(damageFactor);
+	        if (mapsToRun > 0) {
+	            for (int x = 0; x < mapsToRun; x++) {
+	                eM.dropMap(zone, blacksmitheryZone);
+	            }
+	            mapsRunZone = mapsToRun;
+	            time += cellDelay * 13 * mapsToRun;
+	            // TODO won't always be able to run the best possible map, actually calcuate resources for highest map that can be run
+	            metal += jCMod * 5 * (26 / 33.33 * mapsToRun) * 1.5
+	                    * pM.getPopulation()
+	                    + jCMod * 45 / 6 * (26 / 33.33 * mapsToRun) * 1.5
+	                            * pM.getPopulation();
+	        }
+	        // pM and eM each get metal thrown into them and keep it until they spend it
+	        // (as opposed to spending 1% of remaining metal each zone on pM, even if no equipment was bought)
+	        buyStuff();
+	        metal = 0;
         }
-        metal -= pM.buyStuff(metal / 50);
-        metal -= eM.buyStuff(metal);
+    }
+    
+    private double minZoneTime() {
+    	return 50 * cellDelay + attackDelay * getNumCorrupt(zone, corruptionStart) / 12d * expectedDodges;
+    }
+    
+    private double runMap() {
+    	eM.dropMap(zone,  blacksmitheryZone);
+        // TODO won't always be able to run the best possible map, actually calcuate resources for highest map that can actually be run
+    	// -> may need a correction to runtime as well
+    	metal += jCMod * 5 * (26 / 33.33) * 1.5
+                * pM.getPopulation()
+                + jCMod * 45 / 6 * (26 / 33.33) * 1.5
+                        * pM.getPopulation();
+    	buyStuff();
+    	return (cellDelay * 13);
+    }
+    
+    private void buyStuff() {
+    	pM.buyStuff(metal / 100d);
+    	pM.buyCoordinations();
+    	// todo: account for metal spent on armor (5%?)
+    	eM.buyStuff(metal * 99 / 100d);
+    	metal = 0;
     }
 
+    public static int getNumCorrupt(int zone, int corruptionStart) {
+        return (zone < corruptionStart) ? 0 : Math.min(80,
+                Math.max(0, (int) ((zone - corruptionStart) / 3) + 2));
+    }
+    
     private void doZone() {
-        double damage = damageMod * goldenBattleMod * eM.gerTotalDamage()
+        double damage = damageMod * goldenBattleMod * eM.getTotalDamage()
                 * pM.getDamageFactor() * (1d + 0.2d * mapsRunZone);
         double hp = enemyHealth();
         double damageFactor = damage / hp;
         double res = 0;
         if (useCache) {
-            int corrupted = Math.min(80,
-                    Math.max(0, ((int) ((zone - corruptionStart) / 3)) + 2));
+            int corrupted = getNumCorrupt(zone, corruptionStart);
             double cachedValue = SimulationCache.getInstance()
                     .getValue(corrupted, damageFactor);
             if (cachedValue == 0) {
@@ -215,7 +306,11 @@ public class TrimpsSimulation {
             }
         }
         time += res;
-        metal += metalMod * res * pM.getPopulation();
+        addZoneProduction(res);
+    }
+    
+    private void addZoneProduction(double zoneTime) {
+    	metal += metalMod * zoneTime * pM.getPopulation();
         metal += dropMod * 17 * pM.getPopulation();
     }
 
@@ -270,8 +365,7 @@ public class TrimpsSimulation {
         heliumMod *= Math.pow(1.005, zone);
         heliumMod *= lootingMod;
         heliumMod *= goldenHeliumMod;
-        helium += heliumMod * (1 + 0.15 * Math.min(80,
-                Math.max(0, ((int) ((zone - corruptionStart) * 3)) + 2)));
+        helium += heliumMod * (1 + 0.15 * getNumCorrupt(zone, corruptionStart));
     }
 
     private double enemyHealth() {

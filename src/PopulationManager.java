@@ -9,6 +9,18 @@ public class PopulationManager {
     private int gigaStations;
     private int warpStations;
     private double damageFactor;
+    private double metal;
+    
+    private double SVresourcefulFactor;
+    private double SVpopulation;
+    private double SVarmyPopulation;
+    private int SVunboughtCoordinations;
+    private double SVcoordinationFactor;
+    private double SVcarpentryFactor;
+    private int SVgigaStations;
+    private int SVwarpStations;
+    private double SVdamageFactor;
+    private double SVmetal;
 
     public PopulationManager(final int carpentryLevel,
             final int carpentry2Level, final int resourcefulLevel,
@@ -23,6 +35,33 @@ public class PopulationManager {
         gigaStations = -1;
         warpStations = 0;
         damageFactor = 1;
+        metal = 0;
+    }
+    
+    public void save() {
+        SVresourcefulFactor = resourcefulFactor;
+        SVpopulation = population;
+        SVarmyPopulation = armyPopulation;
+        SVunboughtCoordinations = unboughtCoordinations;
+        SVcoordinationFactor = coordinationFactor;
+        SVcarpentryFactor = carpentryFactor;
+        SVgigaStations = gigaStations;
+        SVwarpStations = warpStations;
+        SVdamageFactor = damageFactor;
+        SVmetal = metal;
+    }    
+    
+    public void restore() {
+        resourcefulFactor = SVresourcefulFactor;
+        population = SVpopulation;
+        armyPopulation = SVarmyPopulation;
+        unboughtCoordinations = SVunboughtCoordinations;
+        coordinationFactor = SVcoordinationFactor;
+        carpentryFactor = SVcarpentryFactor;
+        gigaStations = SVgigaStations;
+        warpStations = SVwarpStations;
+        damageFactor = SVdamageFactor;
+        metal = SVmetal;
     }
 
     public void buyCoordinations() {
@@ -86,15 +125,16 @@ public class PopulationManager {
         return population;
     }
 
-    public double buyStuff(final double metal) {
-        if (gigaStations==-1){
-            return metal;
+    // TODO optimize gigastation buys (will matter for <5B He or so)
+    // -> lost tauntimp population from not buying a gigastation is about .2% per zone,
+    // so buy one if you can't get that much pop gain from warpstations this zone
+    public void buyStuff(final double newMetal) {
+    	metal += newMetal;
+        if (gigaStations >=0) {
+        	while (metal > getWarpStationCost()) {
+        		metal -= getWarpStationCost();
+        		buyWarpStation();
+        	}
         }
-        double res = metal;
-        while (res > getWarpStationCost()) {
-            res -= getWarpStationCost();
-            buyWarpStation();
-        }
-        return metal-res;
     }
 }

@@ -12,8 +12,7 @@ public class AveragedZoneSimulation extends ZoneSimulation {
             final int corruptionStart, final int zone) {
         double acc = 0;
         for (int x = 0; x < zoneSimulationRepeatAmount; x++) {
-            EnemyType[] zoneArray = createZone(Math.min(80,
-                    Math.max(0, ((int) ((zone - corruptionStart) / 3)) + 2)));
+            EnemyType[] zoneArray = createZone(TrimpsSimulation.getNumCorrupt(zone, corruptionStart));
             double res = 0;
             int cell = 1;
             Random random = new Random();
