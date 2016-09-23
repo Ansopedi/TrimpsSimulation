@@ -49,15 +49,15 @@ public class TrimpsSimulation {
     // private double[][] zoneStats = new double[100][10];
     public static void main(String[] args) {
         long times = System.nanoTime();
-        int[] perks = new int[] {93,87,88,101,67300,47600,16800,56700,59,86,45};
+        int[] perks = new int[] {92,88,89,101,77100,47300,17000,55600,59,86,44};
         Perks p = new Perks(perks);
         TrimpsSimulation tS = new TrimpsSimulation(p, false,
                 //new AveragedZoneSimulation());
         		new ProbabilisticZoneModel(critChance, critDamage, okFactor));
         double highestHeHr = 0;
         SimulationResult sR = tS.runSimulation();
-        System.out.format("Result: zone=%d time=%.3fhr hehr%%=%.3f simtime=%dms",
-        		sR.zone, sR.time/3600d, 100 * sR.heHrPercentage,
+        System.out.format("Result: zone=%d time=%.3fhr hehr%%=%.3f simtime=%dms%n",
+        		sR.zone, sR.hours, 100d * sR.helium / p.getSpentHelium() / sR.hours,
         		(System.nanoTime() - times) / 1000000l);
     }
 
