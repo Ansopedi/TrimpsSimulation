@@ -9,7 +9,7 @@ public class EquipmentManager {
     private final static int costMod = 53;
     private final static double dmgBase = 1.19;
     private final static double costBase = 1.069;
-    private final double artisanistryFactor;
+    private final double equipDiscount;
     private double metal;
     
     private final int[] SVcurrentPrestiges;
@@ -17,7 +17,7 @@ public class EquipmentManager {
     private final int[] SVcurrentLevels;
     private double SVmetal;
 
-    public EquipmentManager(final int artisanistryLevel) {
+    public EquipmentManager(final double equipDiscount) {
         currentPrestiges = new int[Equipment.values().length];
         maxPrestiges = new int[Equipment.values().length];
         currentLevels = new int[Equipment.values().length];
@@ -26,7 +26,7 @@ public class EquipmentManager {
             maxPrestiges[x] = 2;
             currentLevels[x] = 1;
         }
-        artisanistryFactor = Math.pow(0.95, artisanistryLevel);
+        this.equipDiscount = equipDiscount;
         metal = 0;
         
 
@@ -88,7 +88,7 @@ public class EquipmentManager {
             mod = currentPrestiges[equipment.ordinal()] - 1;
         }
         return equipment.baseCost * Math.pow(costBase, mod * costMod + 1)
-                * artisanistryFactor;
+                * equipDiscount;
     }
 
     private double getNextEquipmentCost(final Equipment equipment) {
@@ -102,7 +102,7 @@ public class EquipmentManager {
             mod = currentPrestiges[equipment.ordinal()];
         }
         return equipment.baseCost * Math.pow(costBase, mod * costMod + 1)
-                * artisanistryFactor;
+                * equipDiscount;
     }
 
     public void buyStuff(final double newMetal) {

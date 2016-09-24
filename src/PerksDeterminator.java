@@ -27,12 +27,30 @@ public class PerksDeterminator {
         this.perks = perks;
     }
 
+    public static double[] tsFactorsFromPerks(Perks perks) {
+    	double[] res = new double[7];
+    	int[] perkLevels = perks.getPerkLevels();
+        res[0] = (1 + 0.05 * perkLevels[Perk.POWER.ordinal()])
+				* (1 + 0.01 * perkLevels[Perk.POWER2.ordinal()]);
+        res[1] = (1 + 0.05 * perkLevels[Perk.MOTIVATION.ordinal()])
+				* (1 + 0.01 * perkLevels[Perk.MOTIVATION2.ordinal()]);	
+        res[2] = Math.pow(1.1, perkLevels[Perk.CARPENTRY.ordinal()])
+				* (1 + 0.0025 * perkLevels[Perk.CARPENTRY2.ordinal()]);
+        res[3] = (1 + 0.05 * perkLevels[Perk.LOOTING.ordinal()])
+				* (1 + 0.0025 * perkLevels[Perk.LOOTING2.ordinal()]);
+        res[4] = (1 + 0.25 * Math.pow(.98, perkLevels[Perk.COORDINATED.ordinal()]));
+        res[5] = Math.pow(0.95, perkLevels[Perk.ARTISANISTRY.ordinal()]);
+        res[6] = Math.pow(0.95, perkLevels[Perk.RESOURCEFUL.ordinal()]);
+        return res;
+    }
+    
     public Perks determinePerks() {
         Perks savedPerks = new Perks(perks);
         ZoneSimulation zS = new ProbabilisticZoneModel(
                 TrimpsSimulation.critChance, TrimpsSimulation.critDamage,
                 TrimpsSimulation.okFactor);
-        TrimpsSimulation tS = new TrimpsSimulation(perks, false, zS);
+        double[] tsFactors = tsFactorsFromPerks(perks);
+        TrimpsSimulation tS = new TrimpsSimulation(tsFactors, false, zS);
         SimulationResult prev = tS.runSimulation();
         while (true) {
             long time = System.nanoTime();
@@ -44,7 +62,7 @@ public class PerksDeterminator {
                 for (int i : p.levelIncreases) {
                     Perks usePerks = new Perks(savedPerks);
                     if (usePerks.buyPerk(p, i)) {
-                        SimulationThread sT = new SimulationThread(usePerks,
+                        SimulationThread sT = new SimulationThread(usePerks, savedPerks,
                                 count,i, zS, prev);
                         threads.add(sT);
                     }
@@ -138,16 +156,19 @@ public class PerksDeterminator {
     public class SimulationThread extends Thread {
 
         private Perks perks;
+        private Perks prevPerks;
         private int perkPosition;
         private int perkIncrease;
         private SimulationResult sR;
         private SimulationResult prev;
         private ZoneSimulation zS;
 
-        public SimulationThread(final Perks perks, final int perkPosition,
+        public SimulationThread(final Perks perks, final Perks prevPerks,
+        		final int perkPosition,
                 final int perkIncrease, final ZoneSimulation zS,
                 final SimulationResult prev) {
             this.perks = perks;
+            this.prevPerks = prevPerks;
             this.perkPosition = perkPosition;
             this.perkIncrease = perkIncrease;
             this.zS = zS;
@@ -155,13 +176,13 @@ public class PerksDeterminator {
         }
 
         public void run() {
-            TrimpsSimulation tS = new TrimpsSimulation(perks, false, zS);
+            TrimpsSimulation tS = new TrimpsSimulation(tsFactorsFromPerks(perks), false, zS);
             sR = tS.runSimulation();
         }
 
         private double getRelativeEfficiency() {
             return logOfBase(
-                    sR.perks.getSpentHelium() / prev.perks.getSpentHelium(),
+                    perks.getSpentHelium() / prevPerks.getSpentHelium(),
                     getRunEfficiency(sR) / getRunEfficiency(prev));
         }
 

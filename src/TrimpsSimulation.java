@@ -18,20 +18,33 @@ public class TrimpsSimulation {
     public final static double heirloomMetalDrop = 6.04;
     public final static double heirloomMinerEff = 6.12;
     public final static int corruptionStart = 151;
-    public final static boolean optimizeMaps = true;
+    public final static double turkimpMod = 1.75;
+    public final static double turkimpDropMod = (turkimpMod == 1.75) ? 1.249 : 1.166;
+    public final static double dropsPerZone = 17;
+    public final static double mapSize = 26;
+    public final static double dropsPerMap = mapSize / 2d / 3d; // garden drop (1/3 metal) on 1/2 cells
+    public final static double minerFraction = 0.99;
+    public final static int packrat = 40;
+    public final static boolean optimizeMaps = true; // true=optimize maps by doing test sims, false=use fixed grid based on damageFactor
     private final static double[] mapOffsets = new double[] { 100, 0.75, 0.5,
             0.2, 0.13, 0.08, 0.05, 0.036, 0.03, 0.0275 };
-    private final static int minEquip = 5; // 5=polearm, 3=mace, 1=dagger, etc
     private final boolean useCache;
     private Perks perks;
     private double goldenHeliumMod;
     private double goldenBattleMod;
     private double goldenBought;
+    private double powMod;
     private double damageMod;
     private double dropMod;
     private double metalMod;
     private double jCMod;
     private double lootingMod;
+    private double motiMod;
+    private double coordFactor;
+    private double popMod;
+    private double storageFactor;
+    private double buildingDiscount;
+    private double equipDiscount;
     private double helium;
     private int mapsRunZone;
     private double time;
@@ -49,9 +62,9 @@ public class TrimpsSimulation {
     // private double[][] zoneStats = new double[100][10];
     public static void main(String[] args) {
         long times = System.nanoTime();
-        int[] perks = new int[] {92,88,89,101,77100,47300,17000,55600,59,86,44};
+        int[] perks = new int[] {91,88,89,102,63100,44300,20300,55100,59,86,44};
         Perks p = new Perks(perks);
-        TrimpsSimulation tS = new TrimpsSimulation(p, false,
+        TrimpsSimulation tS = new TrimpsSimulation(PerksDeterminator.tsFactorsFromPerks(p), false,
                 //new AveragedZoneSimulation());
         		new ProbabilisticZoneModel(critChance, critDamage, okFactor));
         double highestHeHr = 0;
@@ -66,7 +79,7 @@ public class TrimpsSimulation {
         while (true) {
             startZone();
             pM.buyCoordinations();
-            doMapsAndBuyStuff(); // true=optimize maps by doing test sims, false=use fixed grid based on damageFactor
+            doMapsAndBuyStuff();
             if (!optimizeMaps) {
             	pM.buyCoordinations();
             	doZone();
@@ -78,36 +91,38 @@ public class TrimpsSimulation {
             }
             highestHeHr = newHeHr;
         }
-        return new SimulationResult(helium,time/3600,perks,zone);
+        return new SimulationResult(helium,time/3600,zone);
     }
 
-    public TrimpsSimulation(final Perks perks, final boolean useCache,
+    public TrimpsSimulation(
+    		final double[] tsFactors,
+    		final boolean useCache,
             final ZoneSimulation zoneSimulation) {
         this.useCache = useCache;
-        this.perks = perks;
-        int[] perkLevels = perks.getPerkLevels();
-        eM = new EquipmentManager(perkLevels[Perk.ARTISANISTRY.ordinal()]);
-        pM = new PopulationManager(perkLevels[Perk.CARPENTRY.ordinal()],
-                perkLevels[Perk.CARPENTRY2.ordinal()],
-                perkLevels[Perk.RESOURCEFUL.ordinal()],
-                perkLevels[Perk.COORDINATED.ordinal()]);
+        powMod = tsFactors[0];
+        motiMod = tsFactors[1];
+        popMod = tsFactors[2];
+        lootingMod = tsFactors[3];
+        coordFactor = tsFactors[4];
+        equipDiscount = tsFactors[5];
+        buildingDiscount = tsFactors[6];
+        eM = new EquipmentManager(equipDiscount);
+        pM = new PopulationManager(popMod, buildingDiscount, coordFactor);
         damageMod = achievementDamage
-                * (1 + 0.05 * perkLevels[Perk.POWER.ordinal()])
-                * (1 + 0.01 * perkLevels[Perk.POWER2.ordinal()]) * 7 * 4
-                * robotrimpDamage * heirloomDamage;
-        metalMod = 0.25 * heirloomMinerEff * 1.75
-                * (1 + 0.05 * perkLevels[Perk.MOTIVATION.ordinal()])
-                * (1 + 0.01 * perkLevels[Perk.MOTIVATION2.ordinal()]);
-        dropMod = 0.16 * heirloomMetalDrop * 1.249 * 1.8 * 2
-                * (1 + 0.05 * perkLevels[Perk.LOOTING.ordinal()])
-                * (1 + 0.0025 * perkLevels[Perk.LOOTING2.ordinal()]);
-        jCMod = 0.25 * heirloomMinerEff * 1.75
-                * (1 + 0.05 * perkLevels[Perk.MOTIVATION.ordinal()])
-                * (1 + 0.01 * perkLevels[Perk.MOTIVATION2.ordinal()])
-                * (1 + 0.05 * perkLevels[Perk.LOOTING.ordinal()])
-                * (1 + 0.0025 * perkLevels[Perk.LOOTING2.ordinal()]);
-        lootingMod = (1 + 0.05 * perkLevels[Perk.LOOTING.ordinal()])
-                * (1 + 0.0025 * perkLevels[Perk.LOOTING2.ordinal()]);
+                * 7 * 4 // anticipation * dominance
+                * robotrimpDamage * heirloomDamage
+                * powMod;
+        storageFactor = 1 - 0.25 * buildingDiscount/(1 + packrat/5d); // storage costs eat into all resources
+        metalMod = 0.5 // base per miner
+        		* minerFraction * 0.5 // workspaces are half of population
+        		* heirloomMinerEff * turkimpMod
+        		* storageFactor
+                * motiMod;
+        dropMod = 0.16 * heirloomMetalDrop * turkimpDropMod
+        		* storageFactor
+                * lootingMod;
+        jCMod = metalMod
+                * lootingMod;
         helium = 0;
         time = 0;
         zone = 0;
@@ -173,13 +188,14 @@ public class TrimpsSimulation {
                     * pM.getDamageFactor();
             double improbHP = hp / .508 * 1.3 * 6;
             int minMaps = Math.max(mapsRunZone - 2,0);
-	        minMaps += ((damage - improbHP) * okFactor < improbHP) ? 1 : 0;
+            double minImprobDamage = (damage - improbHP) * okFactor;
+	        minMaps += (minImprobDamage < improbHP) ? 1 : 0;
 	        while (maps < minMaps) {
 	        	mapTime += runMap();
 	        	maps++;
 	        }
 	        mapsRunZone = maps;
-	        if (minMaps == 0) { // this means we are guaranteed 100% overkill, so just calculate the min zone time and be done
+	        if (minImprobDamage * (1 + 0.2d * minMaps) >= improbHP) { // this means we are guaranteed 100% overkill, so just calculate the min zone time and be done
 	        	bestZoneTime = minZoneTime();
 	        	bestTime = bestZoneTime;
 	        } else {
@@ -209,10 +225,9 @@ public class TrimpsSimulation {
 		        metal = SVmetal;
 	        }
 	        time += bestTime;
-	        addZoneProduction(bestZoneTime);
-	        //System.out.format("Zone %d, ran %d maps, total time %.2f%n", zone, mapsRunZone, bestTime);
+	        addProduction(bestZoneTime, dropsPerZone, 1);
+	        //System.out.format("Zone %d, ran %d maps, total time %.2f, dF=%.3f%n", zone, mapsRunZone, bestTime, dF);
         } else {
-
         	mapsRunZone = 0;
             double damage = damageMod * goldenBattleMod * eM.getTotalDamage()
                     * pM.getDamageFactor();
@@ -221,20 +236,13 @@ public class TrimpsSimulation {
 	        int mapsToRun = mapsToRun(damageFactor);
 	        if (mapsToRun > 0) {
 	            for (int x = 0; x < mapsToRun; x++) {
-	                eM.dropMap(zone, blacksmitheryZone);
+	                runMap();
 	            }
 	            mapsRunZone = mapsToRun;
-	            time += cellDelay * 13 * mapsToRun;
-	            // TODO won't always be able to run the best possible map, actually calcuate resources for highest map that can be run
-	            metal += jCMod * 5 * (26 / 33.33 * mapsToRun) * 1.5
-	                    * pM.getPopulation()
-	                    + jCMod * 45 / 6 * (26 / 33.33 * mapsToRun) * 1.5
-	                            * pM.getPopulation();
+	            time += cellDelay * mapSize / 2d * mapsToRun;
 	        }
-	        // pM and eM each get metal thrown into them and keep it until they spend it
-	        // (as opposed to spending 1% of remaining metal each zone on pM, even if no equipment was bought)
 	        buyStuff();
-	        metal = 0;
+	        //System.out.format("Zone %d, ran %d maps, map time %.2f, dF=%.3f%n", zone, mapsRunZone, mapsRunZone * cellDelay * mapSize / 2d, damageFactor);
         }
     }
     
@@ -246,12 +254,14 @@ public class TrimpsSimulation {
     	eM.dropMap(zone,  blacksmitheryZone);
         // TODO won't always be able to run the best possible map, actually calcuate resources for highest map that can actually be run
     	// -> may need a correction to runtime as well
-    	metal += jCMod * 5 * (26 / 33.33) * 1.5
-                * pM.getPopulation()
-                + jCMod * 45 / 6 * (26 / 33.33) * 1.5
-                        * pM.getPopulation();
+    	// Chrono/Jest drops
+    	metal += jCMod * (5d + 45d/6d) * (mapSize / 33.33d)
+    			* 2 // scrying
+    			* 1.815 * (0.8 + 0.1 * mapSize / 100d) // 181.5% avg map difficulty, derated because loot is scaled based on 100 cells
+    			* pM.getPopulation();
+    	addProduction(cellDelay * mapSize / 2d, dropsPerMap, 2);
     	buyStuff();
-    	return (cellDelay * 13);
+    	return (cellDelay * mapSize / 2d);
     }
     
     private void buyStuff() {
@@ -306,12 +316,12 @@ public class TrimpsSimulation {
             }
         }
         time += res;
-        addZoneProduction(res);
+        addProduction(res, dropsPerZone, 1);
     }
     
-    private void addZoneProduction(double zoneTime) {
-    	metal += metalMod * zoneTime * pM.getPopulation();
-        metal += dropMod * 17 * pM.getPopulation();
+    private void addProduction(double time, double nDrops, double scryFactor) {
+    	metal += metalMod * time * pM.getPopulation();
+        metal += dropMod * nDrops * scryFactor * pM.getPopulation();
     }
 
     private void endZone() {
