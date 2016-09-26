@@ -24,6 +24,7 @@ public class TrimpsSimulation {
     public final static double mapSize = 26;
     public final static double dropsPerMap = mapSize / 2d / 3d; // garden drop (1/3 metal) on 1/2 cells
     public final static double minerFraction = 0.99;
+    public final static double armorFraction = 0.01; // fraction of metal spent on armor
     public final static int packrat = 40;
     public final static boolean optimizeMaps = true; // true=optimize maps by doing test sims, false=use fixed grid based on damageFactor
     private final static double[] mapOffsets = new double[] { 100, 0.75, 0.5,
@@ -64,7 +65,7 @@ public class TrimpsSimulation {
         long times = System.nanoTime();
         int[] perks = new int[] {91,88,89,102,63100,44300,20300,55100,59,86,44};
         Perks p = new Perks(perks);
-        TrimpsSimulation tS = new TrimpsSimulation(PerksDeterminator.tsFactorsFromPerks(p), false,
+        TrimpsSimulation tS = new TrimpsSimulation(p.getTSFactors(), false,
                 //new AveragedZoneSimulation());
         		new ProbabilisticZoneModel(critChance, critDamage, okFactor));
         double highestHeHr = 0;
@@ -99,26 +100,33 @@ public class TrimpsSimulation {
     		final boolean useCache,
             final ZoneSimulation zoneSimulation) {
         this.useCache = useCache;
-        powMod = tsFactors[0];
-        motiMod = tsFactors[1];
-        popMod = tsFactors[2];
-        lootingMod = tsFactors[3];
-        coordFactor = tsFactors[4];
-        equipDiscount = tsFactors[5];
-        buildingDiscount = tsFactors[6];
+        powMod = tsFactors[Perks.tsFactor.POWER.ordinal()];
+        motiMod = tsFactors[Perks.tsFactor.MOTIVATION.ordinal()];
+        popMod = tsFactors[Perks.tsFactor.CARPENTRY.ordinal()];
+        lootingMod = tsFactors[Perks.tsFactor.LOOTING.ordinal()];
+        coordFactor = tsFactors[Perks.tsFactor.COORDINATED.ordinal()];
+        equipDiscount = tsFactors[Perks.tsFactor.ARTISANISTRY.ordinal()];
+        buildingDiscount = tsFactors[Perks.tsFactor.RESOURCEFUL.ordinal()];
         eM = new EquipmentManager(equipDiscount);
         pM = new PopulationManager(popMod, buildingDiscount, coordFactor);
         damageMod = achievementDamage
-                * 7 * 4 // anticipation * dominance
-                * robotrimpDamage * heirloomDamage
+                * 7 // anticipation
+                * 4 // dominance
+                * robotrimpDamage
+                * heirloomDamage
                 * powMod;
         storageFactor = 1 - 0.25 * buildingDiscount/(1 + packrat/5d); // storage costs eat into all resources
         metalMod = 0.5 // base per miner
         		* minerFraction * 0.5 // workspaces are half of population
-        		* heirloomMinerEff * turkimpMod
+        		* heirloomMinerEff
+        		* turkimpMod
+        		* (1 - armorFraction)
         		* storageFactor
                 * motiMod;
-        dropMod = 0.16 * heirloomMetalDrop * turkimpDropMod
+        dropMod = 0.16 // drops are based on 1/6 of population
+        		* heirloomMetalDrop
+        		* turkimpDropMod
+        		* (1 - armorFraction)
         		* storageFactor
                 * lootingMod;
         jCMod = metalMod
@@ -226,7 +234,7 @@ public class TrimpsSimulation {
 	        }
 	        time += bestTime;
 	        addProduction(bestZoneTime, dropsPerZone, 1);
-	        //System.out.format("Zone %d, ran %d maps, total time %.2f, dF=%.3f%n", zone, mapsRunZone, bestTime, dF);
+	        //System.out.format("Zone %d, ran %d maps, total time %.2f, dF=%.3f%n", zone, mapsRunZone, bestTime, damage / hp);
         } else {
         	mapsRunZone = 0;
             double damage = damageMod * goldenBattleMod * eM.getTotalDamage()
