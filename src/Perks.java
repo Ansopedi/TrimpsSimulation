@@ -5,6 +5,7 @@ public class Perks {
     private double totalHelium;
     private double helium;
     private int[] perks;
+    private boolean fineTune = false;
 
     public Perks(final int[] perks, final double helium) {
         totalHelium = helium;
@@ -57,8 +58,7 @@ public class Perks {
         if (perk.additive){
             double base = perk.baseCost+((double)perk.scaleFactor*baseLevel);
             return ((base+(double)(perk.scaleFactor*(amount-1)/2d))*amount);
-        }
-        else{
+        } else{
         	double base = perk.baseCost*Math.pow(perk.scaleFactor, baseLevel);
         	// base cost times geometric sum for exponents of 1 -> amount
             return base
@@ -90,49 +90,114 @@ public class Perks {
     }
     
     public enum tsFactor {
-    	POWER, MOTIVATION, CARPENTRY, LOOTING, COORDINATED, ARTISANISTRY, RESOURCEFUL;
+    	POWER(Perk.POWER,Perk.POWER2,1.5),
+    	MOTIVATION(Perk.MOTIVATION,Perk.MOTIVATION2,1.5),
+    	CARPENTRY(Perk.CARPENTRY,Perk.CARPENTRY2,1.2),
+    	LOOTING(Perk.LOOTING,Perk.LOOTING2,1.2),
+    	COORDINATED(Perk.COORDINATED,null,1),
+    	ARTISANISTRY(Perk.ARTISANISTRY,null,0.75),
+    	RESOURCEFUL(Perk.RESOURCEFUL,null,0.5);
+    	
+    	public final Perk base;
+    	public final Perk spire;
+    	public final double testEffect; // size of effect to test in the determinator
+    	
+    	tsFactor(Perk base, Perk spire, double testEffect) {
+    		this.base = base;
+    		this.spire = spire;
+    		this.testEffect = testEffect;
+    	}
+    	
+    	public boolean hasSpirePerk() {
+    		return spire != null;
+    	}
     }
     public static final int numTSFactors = tsFactor.values().length;
     
     public double[] getTSFactors() {
     	double[] res = new double[numTSFactors];
-        res[tsFactor.POWER.ordinal()] = (1 + Perk.POWER.effect * perks[Perk.POWER.ordinal()])
-				* (1 + Perk.POWER2.effect * perks[Perk.POWER2.ordinal()]);
-        res[tsFactor.MOTIVATION.ordinal()] = (1 + Perk.MOTIVATION.effect * perks[Perk.MOTIVATION.ordinal()])
-				* (1 + Perk.MOTIVATION2.effect * perks[Perk.MOTIVATION2.ordinal()]);	
-        res[tsFactor.CARPENTRY.ordinal()] = Math.pow(Perk.CARPENTRY.effect, perks[Perk.CARPENTRY.ordinal()])
-				* (1 + Perk.CARPENTRY2.effect * perks[Perk.CARPENTRY2.ordinal()]);
-        res[tsFactor.LOOTING.ordinal()] = (1 + Perk.LOOTING.effect * perks[Perk.LOOTING.ordinal()])
-				* (1 + Perk.LOOTING2.effect * perks[Perk.LOOTING2.ordinal()]);
-        res[tsFactor.COORDINATED.ordinal()] = (1 + 0.25 * Math.pow(Perk.COORDINATED.effect, perks[Perk.COORDINATED.ordinal()]));
-        res[tsFactor.ARTISANISTRY.ordinal()] = Math.pow(Perk.ARTISANISTRY.effect, perks[Perk.ARTISANISTRY.ordinal()]);
-        res[tsFactor.RESOURCEFUL.ordinal()] = Math.pow(Perk.RESOURCEFUL.effect, perks[Perk.RESOURCEFUL.ordinal()]);
-        return res;
+    	for ( tsFactor t : tsFactor.values() ) {
+    		res[t.ordinal()] = getTSFactor(t);
+    	}
+    	return res;
+    }
+    
+    public double getTSFactor(Perk perk, int level) {
+    	double res;
+    	tsFactor tsf = Perk.getTSFactor(perk);
+    	int baseLevel = tsf.base == perk ? level : getLevel(tsf.base);
+		if ( tsf == tsFactor.COORDINATED ) {
+			res =  calcCoordFactor(baseLevel);
+		} else if (tsf.base.compounding) {
+			res =  Math.pow(tsf.base.effect, baseLevel);
+		} else {
+			res =  1 + tsf.base.effect * baseLevel;
+		}
+		if ( tsf.hasSpirePerk() ) {
+	    	int spireLevel = tsf.spire == perk ? level : getLevel(tsf.spire);
+			res *= 1 + tsf.spire.effect * spireLevel;
+		}
+		return res;
+    }
+    
+    public double getTSFactor(tsFactor t) {
+    	return getTSFactor(t.base, getLevel(t.base));
     }
     
     public static double calcCoordFactor(int level) {
-    	return (1 + 0.25 * Math.pow(.98, level));
+    	return (1 + 0.25 * Math.pow(Perk.COORDINATED.effect, level));
     }
     
     private class BuySellEfficiency {
     	private double buyEfficiency;
+    	private double cost;
     	private double sellEfficiency;
-    	private Perk perk;
-    	private double rawEff;
+    	private final tsFactor statType;
+    	private final double baselineEff;	// efficiency at creation level of perk (or +1 for coord)
+    	private final double slopeEff;	// slope of efficiency curve between *effect and /effect
+    	private final double baseFactor;	// baseline tsFactor
+    	private Perk buyPerk;
+    	private Perk sellPerk;
     	
-    	public BuySellEfficiency( Perk p, double rE ) {
-    		perk = p;
-    		rawEff = rE;
+    	public BuySellEfficiency( tsFactor tsF, double bE, double sE ) {
+    		statType = tsF;
+    		// COORDINATED overloads these fields:
+    		//	baseFactor = baseline level
+    		//	baselineEff = raw helium gain of next point
+    		//  slopeEff = raw helium gain of last point
+    		baseFactor = tsF == tsFactor.COORDINATED ? getLevel(tsF.base) : getTSFactor(tsF);
+    		baselineEff = bE;
+    		slopeEff = sE;
     		calculateEfficiencies();
     	}
     	
     	private void calculateEfficiencies() {
-    		buyEfficiency = getHeliumGainEfficiency(perk, rawEff, 1);
-    		sellEfficiency = getHeliumGainEfficiency(perk, rawEff, -1);
+        	double[] tmp = getHeliumGainEfficiencies(statType.base, baseFactor, baselineEff, slopeEff);
+        	buyEfficiency = tmp[0];
+        	cost = tmp[1];
+        	sellEfficiency = tmp[2];
+        	buyPerk = statType.base;
+        	sellPerk = statType.base;
+        	if (statType.hasSpirePerk()) {
+        		tmp = getHeliumGainEfficiencies(statType.spire, baseFactor, baselineEff, slopeEff);
+        		if (tmp[0] > buyEfficiency || !canBuy()) {
+        			buyEfficiency = tmp[0];
+        			buyPerk = statType.spire;
+        			cost = tmp[1];
+        		}
+        		if (tmp[2] < sellEfficiency) {
+        			sellEfficiency = tmp[2];
+        			sellPerk = statType.spire;
+        		}
+        	}
     	}
     	
-    	public Perk getPerk() {
-    		return perk;
+    	public boolean canBuy() {
+    		return helium >= cost;
+    	}
+    	
+    	public tsFactor getTSF() {
+    		return statType;
     	}
     	
     	public double getSellEfficiency() {
@@ -144,17 +209,19 @@ public class Perks {
     	}
     	
     	public boolean adjustPerk( int amount ) {
-    		if (buyPerk(perk, amount)) {
+    		if (amount == 1 && buyPerk(buyPerk, amount)) {
+    			calculateEfficiencies();
+    			return true;
+    		} else if (amount == -1 && buyPerk(sellPerk, amount)) {
     			calculateEfficiencies();
     			return true;
     		} else {
-    			calculateEfficiencies();
     			return false;
     		}
     	}
     }
     
-    // sort in DESCENDING order of sell efficiency
+    // sort in DESCENDING order of buy efficiency
     private static Comparator<BuySellEfficiency> BuyComp = new Comparator<BuySellEfficiency>() {
     	@Override
     	public int compare(BuySellEfficiency a, BuySellEfficiency b) {
@@ -163,7 +230,20 @@ public class Perks {
     	}
     };
     
-    // sort in DESCENDING order of buy efficiency
+    // sort in DESCENDING order of buy efficiency, ignoring unaffordable perks
+    private static Comparator<BuySellEfficiency> BuyCompAffordable = new Comparator<BuySellEfficiency>() {
+    	@Override
+    	public int compare(BuySellEfficiency a, BuySellEfficiency b) {
+    		if (a.canBuy() && b.canBuy()) {
+    			return (a.buyEfficiency < b.buyEfficiency) ? 1 :
+    				(a.buyEfficiency == b.buyEfficiency) ? 0 : -1;
+    		} else {
+    			return b.canBuy() ? 1 : a.canBuy() ? -1 : 0;
+    		}
+    	}
+    };
+    
+    // sort in DESCENDING order of sell efficiency
     private static Comparator<BuySellEfficiency> SellComp = new Comparator<BuySellEfficiency>() {
     	@Override
     	public int compare(BuySellEfficiency a, BuySellEfficiency b) {
@@ -174,18 +254,22 @@ public class Perks {
    
     // given a set of TrimpsSimulation factor efficiencies, guess a better set of perks
     // return true if perks were changed, else false
-    public boolean permutePerks(double[] rawEffs) {
+    public boolean permutePerks(double[][] rawEffs, boolean fineTune) {
+    	
+    	this.fineTune = fineTune;
     	
     	// Use an array for efficient sorting by 2 different comparators (buy and sell efficiency)
     	// -> The list is small, so the sort operation should be fast.
     	//	The presumption is that the overhead of maintaining more complex collections (e.g. TreeSet)
     	//	with different sorting orders, would be worse than just sorting the whole array
     	//  each time we update an element.
-    	BuySellEfficiency[] bsEffs = new BuySellEfficiency[Perk.values().length];
+    	BuySellEfficiency[] bsEffs = new BuySellEfficiency[tsFactor.values().length];
     	
     	// compile the initial list of buy/sell efficiencies (unsorted)
-    	for ( Perk p : Perk.values() ) {
-    		bsEffs[p.ordinal()] = new BuySellEfficiency(p, rawEffs[p.ordinal()]);
+    	for ( tsFactor t : tsFactor.values() ) {
+    		bsEffs[t.ordinal()] = new BuySellEfficiency(t, rawEffs[0][t.ordinal()], rawEffs[1][t.ordinal()]);
+//    		System.out.format("tsf %s buyEff=%.4e sellEff=%.4e%n",
+//    				t.name(), bsEffs[t.ordinal()].getBuyEfficiency(), bsEffs[t.ordinal()].getSellEfficiency());
     	}
 	
 
@@ -193,8 +277,14 @@ public class Perks {
     	// -> no need to track whether we did anything, because if we did,
     	//	then buyMostEfficientPerks will do something and return true
 		sellLeastEfficientPerks(bsEffs);
+		
+		System.out.println("after sell:");
+    	for ( int i = 0; i < bsEffs.length; i++ ) {
+    		System.out.format("tsf %s buyEff=%.4e sellEff=%.4e%n",
+    				bsEffs[i].getTSF().name(), bsEffs[i].getBuyEfficiency(), bsEffs[i].getSellEfficiency());
+    	}
 	
-		//System.out.format("perks after sell: %s%n", Arrays.toString(perks));
+		System.out.format("perks after sell: %s%n", Arrays.toString(perks));
 	
 		// then buy most-efficient perks until we run out of helium
 		return buyMostEfficientPerks(bsEffs);
@@ -221,23 +311,31 @@ public class Perks {
     	boolean res = false;
     	
     	// sort the list by buy efficiency
-    	Arrays.sort(bsEffs, BuyComp);
+    	Arrays.sort(bsEffs, BuyCompAffordable);
     	
     	// loop until no perk is affordable
-    	while (bsEffs[0].getBuyEfficiency() > 0) {
-    		double nextEfficiency = bsEffs[1].getBuyEfficiency();
+    	while (bsEffs[0].canBuy()) {
+    		double nextEfficiency = bsEffs[1].canBuy() ? bsEffs[1].getBuyEfficiency() : 0;
     		// loop buying this perk until it's no longer the most efficient
     		while (bsEffs[0].getBuyEfficiency() >= nextEfficiency && bsEffs[0].adjustPerk(1)) {
     			res = true;
     		}
-//    		System.out.format("adjusted perk %s to lev=%d eff=%.4e%n",
-//    				bsEffs[0].getPerk(), perks[bsEffs[0].getPerk().ordinal()],
+//    		if (perks[7] > 46343) {
+//    		System.out.format("adjusted TSF %s to lev=%d eff=%.4e%n",
+//    				bsEffs[0].buyPerk, perks[bsEffs[0].buyPerk.ordinal()],
 //    				bsEffs[0].getBuyEfficiency());
+//    		}
     		// re-sort this perk
     		// TODO? we know the rest of the array is sorted, so we can do an O(n) sort if needed
     		// -> but note that O(n * log(#perks)) is already good, so you'd better do a really good job!
-    		Arrays.sort(bsEffs, BuyComp);
+    		Arrays.sort(bsEffs, BuyCompAffordable);
     	}
+    	
+//		System.out.println("after buy:");
+//    	for ( int i = 0; i < bsEffs.length; i++ ) {
+//    		System.out.format("tsf %s buyEff=%.4e sellEff=%.4e%n",
+//    				bsEffs[i].getTSF().name(), bsEffs[i].getBuyEfficiency(), bsEffs[i].getSellEfficiency());
+//    	}
     	
     	return res;
     }
@@ -246,36 +344,76 @@ public class Perks {
     // -> This way efficiencies are stable with changes in spent helium,
     //	and the "true" efficiency (relative to spent helium) converges to
     //	the calculated efficiency as spent helium converges to total helium.
-    private double getHeliumGainEfficiency(Perk perk, double rawEff, int amount) {
+    private double[] getHeliumGainEfficiencies(Perk perk, double baseFactor, double baselineEff, double slopeEff) {
+    	final int amount = 1; // may want to support other amounts eventually
     	int baseLevel = perks[perk.ordinal()];
-    	double cost = perkCost(perk, amount);
-    	if (amount < 0) {
-    		if (baseLevel == 0) {
-    			// return infinite efficiency if we can't sell the requested perk
-    			return Double.POSITIVE_INFINITY;
-    		}
-    		// set sell amount to actual number of levels that can be sold
-    		amount = Math.min(-amount, baseLevel);
-    		baseLevel -= amount;
-    	} else if (amount == 0 || cost > helium) {
-    		// return 0 efficiency if we can't afford the requested amount
-    		return 0;
-    	}
+    	double buyCost = perkCost(perk, amount);
+    	double sellCost = perkCost(perk, -amount);
+    	double[] res = new double[3];
+    	res[1] = buyCost;
     	// transform cost to log on scale of total helium
-    	cost = Math.log(1 + cost / totalHelium);
+    	double logBuyCost = Math.log(1 + buyCost / totalHelium);
+    	double logSellCost = Math.log(1 + sellCost / totalHelium);
+    	double buyFactor;
+    	double sellFactor;
     	if (perk == Perk.COORDINATED) {
-    		// the rawEff for coordinated is the hehr gain from 1 more point
-    		return amount * Math.log(rawEff) / cost;
-    	} else if (perk.compounding) {
+    		if (baseLevel > baseFactor) {
+    			// model exponential decrease in coord eficiency with increasing levels
+    			// -> to avoid buying lots of levels as efficiency tanks
+    			// fineTune sets a hard-cap of +1 or -1 level for coord
+    			buyFactor = fineTune ? 0 : Math.pow(baselineEff,1/(baseLevel - baseFactor));
+    			sellFactor = baselineEff;
+    		} else if (baseLevel == baseFactor) {
+    			buyFactor = baselineEff;
+    			sellFactor = slopeEff;
+    		} else {
+    			// model exponential increase in coord efficiency with decreasing levels
+    			// -> to avoid selling lots of levels as efficiency increases
+    			buyFactor = Math.pow(slopeEff, baseFactor - baseLevel);
+    			sellFactor = fineTune ? Double.POSITIVE_INFINITY : buyFactor * slopeEff;
+    		}
+    		res[0] = amount * Math.log(buyFactor) / logBuyCost;
+    		res[1] = amount * buyCost;
+    		res[2] = amount * Math.log(sellFactor) / logSellCost;
+    		return res;
+    	}
+    	// get the raw buy/sell efficiencies using the baseline & slope, clamping to testEffect
+    	double tE = Perk.getTSFactor(perk).testEffect;
+    	tE = tE > 1 ? tE : 1/tE;
+    	double logTE = Math.log(tE);
+    	buyFactor = getTSFactor(perk, getLevel(perk) + amount) / baseFactor;
+    	buyFactor = Math.max(Math.min(buyFactor, tE),1/tE);
+    	buyFactor = baselineEff + slopeEff * Math.log(buyFactor) / logTE;
+    	
+    	sellFactor = getTSFactor(perk, getLevel(perk) - amount) / baseFactor;
+    	sellFactor = Math.max(Math.min(sellFactor, tE),1/tE);
+    	sellFactor = baselineEff + slopeEff * Math.log(sellFactor) / logTE;
+    	
+    	double buyEffect;
+    	double sellEffect;
+    	if (perk.compounding) {
     		// for compounding perks that provide a discount, the benefit is the reciprocal of the effect
-    		double effect = perk.effect < 1 ? 1/perk.effect : perk.effect;
+    		buyEffect = perk.effect < 1 ? 1/perk.effect : perk.effect;
+    		buyEffect = Math.pow(buyEffect, amount);
+    		sellEffect = buyEffect;
     		// for all compounding perks, the benefit is just multiplied by the number of levels
-    		return rawEff * amount * Math.log(effect) / cost;
     	} else {
     		// for additive perks, the effect diminishes with increasing levels
-    		double effect = 1 + amount / (1/perk.effect + baseLevel);
-    		return rawEff * Math.log(effect) / cost;
+    		buyEffect = 1 + amount / (1/perk.effect + baseLevel);
+    		sellEffect = 1 + amount / (1/perk.effect + baseLevel - amount);
     	}
+		res[0] = buyFactor * Math.log(buyEffect) / logBuyCost;
+		res[1] = amount * buyCost;
+		res[2] = baseLevel == 0 ? Double.POSITIVE_INFINITY : sellFactor * Math.log(sellEffect) / logSellCost;
+    	//	System.out.format("%s lev=%d bE=%3e bF=%3e se=%3e%n", perk.name(), getLevel(perk), res[0], buyFactor, res[2]);
+    	if (res[0] < 0 || res[2] < 0) {
+    		throw new Error(String.format(
+    				"Setting perk %s to negative efficiency! lev=%d bEff=%.2e sEff=%.2e%n"
+    				+ "bFac=%.2e sFac=%.2e bEffect=%.2e sEffect=%.2e 1/tE=%.2e%n",
+    				perk.name(), getLevel(perk), 
+    				res[0], res[2], buyFactor, sellFactor, buyEffect, sellEffect, 1/tE));
+    	}
+    	return res;
     }
     
     // todo: consider junking this. can just treat base/spire perks separately, using same tsFactor.

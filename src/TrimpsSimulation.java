@@ -5,16 +5,16 @@ import java.util.List;
 
 public class TrimpsSimulation {
 
-    public final static int goldenFrequency = 30;
-    public final static int blacksmitheryZone = 284;
+	public final static int goldenFrequency = 30;
+    public final static int blacksmitheryZone = 299;
     public final static double critChance = 0.726;
     public final static double critDamage = 13.7;
     public final static double cellDelay = 0.4;
     public final static double attackDelay = 0.258;
     public final static double okFactor = 0.15;
-    public final static double achievementDamage = 13.577;
+    public final static double achievementDamage = 14.352;
     public final static double heirloomDamage = 5.7;
-    public final static double robotrimpDamage = 7;
+    public final static double robotrimpDamage = 7.6;
     public final static double heirloomMetalDrop = 6.04;
     public final static double heirloomMinerEff = 6.12;
     public final static int corruptionStart = 151;
@@ -24,9 +24,9 @@ public class TrimpsSimulation {
     public final static double mapSize = 26;
     public final static double dropsPerMap = mapSize / 2d / 3d; // garden drop (1/3 metal) on 1/2 cells
     public final static double minerFraction = 0.99;
-    public final static double armorFraction = 0.01; // fraction of metal spent on armor
     public final static int packrat = 40;
-    public final static boolean optimizeMaps = true; // true=optimize maps by doing test sims, false=use fixed grid based on damageFactor
+    public final static boolean optimizeMaps = false; // true=optimize maps by doing test sims, false=use fixed grid based on damageFactor
+    public final static double armorFraction = 0.01; // fraction of metal spent on armor
     private final static double[] mapOffsets = new double[] { 100, 0.75, 0.5,
             0.2, 0.13, 0.08, 0.05, 0.036, 0.03, 0.0275 };
     private final boolean useCache;
@@ -55,6 +55,7 @@ public class TrimpsSimulation {
     private EquipmentManager eM;
     private PopulationManager pM;
     private ZoneSimulation zoneSimulation;
+    private int debug = 0;
     
     // expected dodges per hit for dodge imps
     private final static int dodgeLength = 20;
@@ -76,6 +77,11 @@ public class TrimpsSimulation {
     }
 
     public SimulationResult runSimulation() {
+    	return runSimulation(debug);
+    }
+    
+    public SimulationResult runSimulation(int debug) {
+    	this.debug = debug;
         double highestHeHr = 0;
         while (true) {
             startZone();
@@ -234,7 +240,9 @@ public class TrimpsSimulation {
 	        }
 	        time += bestTime;
 	        addProduction(bestZoneTime, dropsPerZone, 1);
-	        //System.out.format("Zone %d, ran %d maps, total time %.2f, dF=%.3f%n", zone, mapsRunZone, bestTime, damage / hp);
+	        if (debug > 0) {
+	        	System.out.format("Zone %d, ran %d maps, total time %.2f, dF=%.3f%n", zone, mapsRunZone, bestTime, damage / hp);
+	        }
         } else {
         	mapsRunZone = 0;
             double damage = damageMod * goldenBattleMod * eM.getTotalDamage()
