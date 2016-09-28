@@ -17,56 +17,59 @@ public class PerksDeterminator {
         double totalHelium = 57300000000000d;
         // TODO check for non-bought ones
         Perks perks = new Perks(perkArray, totalHelium);
-        ProbabilisticZoneModel zS =
+        PerksDeterminator pD = new PerksDeterminator(perks);
+        pD.printPerksToFile();
+        Perks result = pD.determinePerksPermute();
+        for (int x = 0; x < Perk.values().length; x++) {
+            System.out.print(Perk.values()[x].name() + " : "
+                    + result.getLevel(Perk.values()[x]) + " ");
+        }
+    }
+
+    public PerksDeterminator(final Perks perks) {
+        this.perks = perks;
+    }
+    
+    public Perks determinePerksPermute() {
+    	ProbabilisticZoneModel zS =
         		new ProbabilisticZoneModel(
         				TrimpsSimulation.critChance,
         				TrimpsSimulation.critDamage,
         				TrimpsSimulation.okFactor);
         double bestHeHr = 0;
         double heHr = 0;
-        int[] bestPerks = Arrays.copyOf(perkArray, perkArray.length);
+        Perks bestPerks = new Perks(perks);
+        Perks dpPerks = new Perks(perks);
         long startTime = System.nanoTime();
         boolean fineTune = false;
         int keepTrying = 1;
         do {
         	bestHeHr = Math.max(heHr, bestHeHr);
-	    	TrimpsSimulation tS = new TrimpsSimulation(perks.getTSFactors(), false, zS);
+	    	TrimpsSimulation tS = new TrimpsSimulation(dpPerks.getTSFactors(), false, zS);
 	    	SimulationResult sR = tS.runSimulation();
 	    	heHr = sR.helium / sR.hours;
-	    	System.out.format("baseline %5e he/hr with perks: %s%n", heHr, Arrays.toString(perks.getPerkLevels()));
+	    	System.out.format("baseline %5e he/hr with perks: %s%n", heHr, Arrays.toString(dpPerks.getPerkLevels()));
         	if (heHr > bestHeHr) {
         		bestHeHr = heHr;
-        		System.arraycopy(perks.getPerkLevels(), 0, bestPerks, 0, perkArray.length);
+        		bestPerks = new Perks(dpPerks);
         		keepTrying = 1;
         	} else if (!fineTune) {
         		fineTune = true;
-        		perks = new Perks(bestPerks, totalHelium);
+        		dpPerks = new Perks(bestPerks);
         	} else if (keepTrying-- <= 0) {
         		break;
         	}
 	    	//long time = System.nanoTime();
-	    	double[][] rawEffs = calcPerkEfficiencies(perks, zS, sR, 1);
+	    	double[][] rawEffs = calcPerkEfficiencies(dpPerks, zS, sR, 1);
 	    	//long time2 = System.nanoTime();
 	    	//System.out.println((time2-time)/1000000l + "ms to run sims");
 	    	// 
-	        perks.permutePerks(rawEffs, fineTune);
+	        dpPerks.permutePerks(rawEffs, fineTune);
 	    	//System.out.println((System.nanoTime() - time2) / 1000000l + "ms to run permute");
         } while (true);
-        System.out.format("best he/hr of %5e with perks: %s%n", bestHeHr, Arrays.toString(bestPerks));
+        System.out.format("best he/hr of %5e with perks: %s%n", bestHeHr, Arrays.toString(bestPerks.getPerkLevels()));
         System.out.println((System.nanoTime() - startTime)/1000000l + "ms to determine perks");
-        //perkArray = new int[] { 80, 80, 85, 90, 40000, 15000, 15000, 40000, 50, 82, 41 };
-        //perks = new Perks(perkArray, totalHelium));
-//        PerksDeterminator pD = new PerksDeterminator(perks);
-//        pD.printPerksToFile();
-//        Perks result = pD.determinePerks();
-//        for (int x = 0; x < Perk.values().length; x++) {
-//            System.out.print(Perk.values()[x].name() + " : "
-//                    + result.getLevel(Perk.values()[x]));
-//        }
-    }
-
-    public PerksDeterminator(final Perks perks) {
-        this.perks = perks;
+        return new Perks(bestPerks);
     }
     
     public Perks determinePerks() {

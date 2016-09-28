@@ -47,6 +47,10 @@ public class Perks {
         return totalHelium-helium;
     }
     
+    public double getTotalHelium() {
+    	return totalHelium;
+    }
+    
     public double perkCost(final Perk perk, int amount) {
     	int baseLevel;
     	if (amount < 0) {
