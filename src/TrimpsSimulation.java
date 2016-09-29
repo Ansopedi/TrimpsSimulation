@@ -6,15 +6,15 @@ import java.util.List;
 public class TrimpsSimulation {
 
     public final static int goldenFrequency = 30;
-    public final static int blacksmitheryZone = 284;
+    public final static int blacksmitheryZone = 299;
     public final static double critChance = 0.726;
     public final static double critDamage = 13.7;
     public final static double cellDelay = 0.4;
     public final static double attackDelay = 0.258;
     public final static double okFactor = 0.15;
-    public final static double achievementDamage = 13.577;
+    public final static double achievementDamage = 14.352;
     public final static double heirloomDamage = 5.7;
-    public final static double robotrimpDamage = 7;
+    public final static double robotrimpDamage = 7.6;
     public final static double heirloomMetalDrop = 6.04;
     public final static double heirloomMinerEff = 6.12;
     public final static int corruptionStart = 151;
@@ -25,7 +25,7 @@ public class TrimpsSimulation {
     public final static double dropsPerMap = mapSize / 2d / 3d; // garden drop (1/3 metal) on 1/2 cells
     public final static double minerFraction = 0.99;
     public final static int packrat = 40;
-    public final static boolean optimizeMaps = true; // true=optimize maps by doing test sims, false=use fixed grid based on damageFactor
+    public final static boolean optimizeMaps = false; // true=optimize maps by doing test sims, false=use fixed grid based on damageFactor
     private final static double[] mapOffsets = new double[] { 100, 0.75, 0.5,
             0.2, 0.13, 0.08, 0.05, 0.036, 0.03, 0.0275 };
     private final boolean useCache;
@@ -62,7 +62,7 @@ public class TrimpsSimulation {
     // private double[][] zoneStats = new double[100][10];
     public static void main(String[] args) {
         long times = System.nanoTime();
-        int[] perks = new int[] {91,88,89,102,63100,44300,20300,55100,59,86,44};
+        int[] perks = new int[] {94, 90, 92, 104, 103015, 61405, 26627, 87901, 61, 90, 45};
         Perks p = new Perks(perks);
         TrimpsSimulation tS = new TrimpsSimulation(PerksDeterminator.tsFactorsFromPerks(p), false,
                 //new AveragedZoneSimulation());

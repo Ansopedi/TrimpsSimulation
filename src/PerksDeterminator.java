@@ -10,8 +10,8 @@ public class PerksDeterminator {
     public static void main(String[] args) {
         // TODO fix all 0 bug
         int[] perkArray = new int[] { 80, 80, 80, 90, 40000, 20000, 9000, 27000,
-                59, 80, 44 };
-        double totalHelium = 24900000000000d;
+                61, 80, 44 };
+        double totalHelium = 62100000000000d;
         // TODO check for non-bought ones
         Perks perks = new Perks(perkArray, totalHelium);
         PerksDeterminator pD = new PerksDeterminator(perks);
