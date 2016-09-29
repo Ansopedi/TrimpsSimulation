@@ -2,6 +2,7 @@ import java.io.FileNotFoundException;
 import java.io.PrintWriter;
 import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 public class PerksDeterminator {
@@ -9,39 +10,66 @@ public class PerksDeterminator {
 
     public static void main(String[] args) {
         // TODO fix all 0 bug
-        int[] perkArray = new int[] { 80, 80, 80, 90, 40000, 20000, 9000, 27000,
-                59, 80, 44 };
-        double totalHelium = 24900000000000d;
+        //int[] perkArray = new int[] { 80, 80, 80, 90, 40000, 20000, 9000, 27000,
+        //        59, 80, 44 };
+    	//int[] perkArray = new int[] { 94,92,93,103,99800,64200,22100,83500,60,89,45 };
+    	int[] perkArray = new int[] { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+        double totalHelium = 57300000000000d;
         // TODO check for non-bought ones
         Perks perks = new Perks(perkArray, totalHelium);
         PerksDeterminator pD = new PerksDeterminator(perks);
         pD.printPerksToFile();
-        Perks result = pD.determinePerks();
+        Perks result = pD.determinePerksPermute();
         for (int x = 0; x < Perk.values().length; x++) {
             System.out.print(Perk.values()[x].name() + " : "
-                    + result.getLevel(Perk.values()[x]));
+                    + result.getLevel(Perk.values()[x]) + " ");
         }
     }
 
     public PerksDeterminator(final Perks perks) {
         this.perks = perks;
     }
-
-    public static double[] tsFactorsFromPerks(Perks perks) {
-    	double[] res = new double[7];
-    	int[] perkLevels = perks.getPerkLevels();
-        res[0] = (1 + 0.05 * perkLevels[Perk.POWER.ordinal()])
-				* (1 + 0.01 * perkLevels[Perk.POWER2.ordinal()]);
-        res[1] = (1 + 0.05 * perkLevels[Perk.MOTIVATION.ordinal()])
-				* (1 + 0.01 * perkLevels[Perk.MOTIVATION2.ordinal()]);	
-        res[2] = Math.pow(1.1, perkLevels[Perk.CARPENTRY.ordinal()])
-				* (1 + 0.0025 * perkLevels[Perk.CARPENTRY2.ordinal()]);
-        res[3] = (1 + 0.05 * perkLevels[Perk.LOOTING.ordinal()])
-				* (1 + 0.0025 * perkLevels[Perk.LOOTING2.ordinal()]);
-        res[4] = (1 + 0.25 * Math.pow(.98, perkLevels[Perk.COORDINATED.ordinal()]));
-        res[5] = Math.pow(0.95, perkLevels[Perk.ARTISANISTRY.ordinal()]);
-        res[6] = Math.pow(0.95, perkLevels[Perk.RESOURCEFUL.ordinal()]);
-        return res;
+    
+    public Perks determinePerksPermute() {
+    	ProbabilisticZoneModel zS =
+        		new ProbabilisticZoneModel(
+        				TrimpsSimulation.critChance,
+        				TrimpsSimulation.critDamage,
+        				TrimpsSimulation.okFactor);
+        double bestHeHr = 0;
+        double heHr = 0;
+        Perks bestPerks = new Perks(perks);
+        Perks dpPerks = new Perks(perks);
+        long startTime = System.nanoTime();
+        boolean fineTune = false;
+        int keepTrying = 1;
+        do {
+        	bestHeHr = Math.max(heHr, bestHeHr);
+	    	TrimpsSimulation tS = new TrimpsSimulation(dpPerks.getTSFactors(), false, zS);
+	    	SimulationResult sR = tS.runSimulation();
+	    	heHr = sR.helium / sR.hours;
+	    	System.out.format("baseline %5e he/hr with perks: %s%n", heHr, Arrays.toString(dpPerks.getPerkLevels()));
+        	if (heHr > bestHeHr) {
+        		bestHeHr = heHr;
+        		bestPerks = new Perks(dpPerks);
+        		keepTrying = 1;
+        	} else if (!fineTune) {
+        		fineTune = true;
+        		dpPerks = new Perks(bestPerks);
+        	} else if (keepTrying-- <= 0) {
+        		break;
+        	}
+	    	//long time = System.nanoTime();
+	    	double[][] rawEffs = calcPerkEfficiencies(dpPerks, zS, sR, 1);
+	    	//long time2 = System.nanoTime();
+	    	//System.out.println((time2-time)/1000000l + "ms to run sims");
+	    	// 
+	        dpPerks.permutePerks(rawEffs, fineTune);
+	    	//System.out.println((System.nanoTime() - time2) / 1000000l + "ms to run permute");
+        } while (true);
+        System.out.format("best he/hr of %5e with perks: %s%n", bestHeHr, Arrays.toString(bestPerks.getPerkLevels()));
+        System.out.println((System.nanoTime() - startTime)/1000000l + "ms to determine perks");
+        return new Perks(bestPerks);
     }
     
     public Perks determinePerks() {
@@ -49,7 +77,7 @@ public class PerksDeterminator {
         ZoneSimulation zS = new ProbabilisticZoneModel(
                 TrimpsSimulation.critChance, TrimpsSimulation.critDamage,
                 TrimpsSimulation.okFactor);
-        double[] tsFactors = tsFactorsFromPerks(perks);
+        double[] tsFactors = perks.getTSFactors();
         TrimpsSimulation tS = new TrimpsSimulation(tsFactors, false, zS);
         SimulationResult prev = tS.runSimulation();
         while (true) {
@@ -102,6 +130,84 @@ public class PerksDeterminator {
         }
         return perks;
     }
+    
+    // TODO: allow for finer-grain testing with lower multis (perhaps to fine-tune perks at the end)
+    // -but do note there can be butterfly effects (related to specific prestige buys late in the run
+    //  that may result in insufficient fidelity with small effect sizes
+    private static double[][] calcPerkEfficiencies( Perks perks, ZoneSimulation zS,
+    		SimulationResult resBase, int debug) {
+    	double[] tsFactors = perks.getTSFactors();
+    	double[] testFactors = new double[Perks.numTSFactors];
+    	double hehrBase = resBase.getHehr();
+    	double[][] res = new double[2][Perks.numTSFactors];
+    	TrimpsSimulation tS;
+    	for ( Perks.tsFactor f : Perks.tsFactor.values() ) {
+    		double adjust = f.testEffect;
+    		testFactors = Arrays.copyOf(tsFactors, Perks.numTSFactors);
+    		SimulationResult plusTest = resBase;
+    		SimulationResult minusTest;
+    		if (adjust == 1) { // test point by point instead of changing the stat directly
+    			boolean soldPoint = false;
+    			do {
+    				testFactors[f.ordinal()] = Perks.calcCoordFactor(perks.getLevel(f.base) - 1);
+    				tS = new TrimpsSimulation(testFactors, false, zS);
+    				minusTest = tS.runSimulation(debug-1);
+    				if (minusTest.getHehr() == hehrBase) {
+        				// loop testing -1 point and selling a point if it had no effect
+    					soldPoint = perks.buyPerk(Perk.COORDINATED, -1);
+    				} else if (!soldPoint) {
+    					// or if -1 point has an effect, test +1 point also
+    					testFactors[f.ordinal()] = Perks.calcCoordFactor(perks.getLevel(f.base) + 1);
+    					tS = new TrimpsSimulation(testFactors, false, zS);
+    					plusTest = tS.runSimulation(debug-1);
+    				} else {
+    					// if we sold any points, we know the next point has no effect
+    					soldPoint = false;
+    				}
+    			} while (soldPoint);
+    			// for point by point perks, just return hehr factors for +1 and -1
+    			res[0][f.ordinal()] = plusTest.getHehr() / hehrBase;
+    			res[1][f.ordinal()] = hehrBase / minusTest.getHehr();
+    		} else {
+    			// TODO the perks efficiency calculation should assume no further efficiency change beyond the effect size
+    			double plusEff;
+    			double minusEff;
+    			double logBase;
+    			while (true) {
+    				testFactors[f.ordinal()] = tsFactors[f.ordinal()] * adjust;
+    				tS = new TrimpsSimulation(testFactors, false, zS);
+    				plusTest = tS.runSimulation(debug-1);
+    				testFactors[f.ordinal()] = tsFactors[f.ordinal()] / adjust;
+    				tS = new TrimpsSimulation(testFactors, false, zS);
+    				minusTest = tS.runSimulation(debug-1);
+    				logBase = Math.abs(Math.log(adjust));
+    				plusEff = Math.log(plusTest.getHehr() / hehrBase) / logBase;
+    				minusEff = Math.log(hehrBase / minusTest.getHehr()) / logBase;
+    				if (plusEff > 0 || minusEff > 0) {
+    					// plusEff floor is 0 - possible to have no effect, but assume negative effect is not real (butterfly)
+    					plusEff = plusEff < 0 ? 0 : plusEff;
+    					// we can't handle minusEff of zero, so if it was swamped by butterfly effect just use plusEff
+    					minusEff = minusEff <= 0 ? plusEff : minusEff;
+    					break;
+    				} else {
+    					// if there was no measurable effect, try a bigger effect size
+    					adjust *= adjust;
+    				}
+    			}
+    			// interpolated efficiency at baseline
+    			res[0][f.ordinal()] = (plusEff + minusEff) / 2d;
+    			// slope of efficiency curve between max/min adjusted effects,
+    			// 	normalized to the testEffect range (since we may end up clamping to this range)
+    			// -> at /adjust, efficiency is (baseEff - slope)
+    			// -> at *adjust, efficiency is (baseEff + slope)
+    			res[1][f.ordinal()] = (plusEff - minusEff) / 2d / logBase * Math.abs(Math.log(f.testEffect));
+    		}	
+    	}
+    	
+    	System.out.format("perks=%s%nbaseEff=%s%nslopeEff=%s%n",
+    			Arrays.toString(perks.getPerkLevels()), Arrays.toString(res[0]), Arrays.toString(res[1]));
+    	return res;
+    }
 
     private void comparePow() {
         Perks perks = new Perks(new int[] { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
@@ -152,6 +258,10 @@ public class PerksDeterminator {
         writer.println(sB.toString());
         writer.close();
     }
+    
+    private static double logOfBase(double base, double num) {
+        return Math.log(num) / Math.log(base);
+    }
 
     public class SimulationThread extends Thread {
 
@@ -176,7 +286,7 @@ public class PerksDeterminator {
         }
 
         public void run() {
-            TrimpsSimulation tS = new TrimpsSimulation(tsFactorsFromPerks(perks), false, zS);
+            TrimpsSimulation tS = new TrimpsSimulation(perks.getTSFactors(), false, zS);
             sR = tS.runSimulation();
         }
 
@@ -188,10 +298,6 @@ public class PerksDeterminator {
 
         private double getRunEfficiency(final SimulationResult sR) {
             return sR.helium / sR.hours;
-        }
-
-        private double logOfBase(double base, double num) {
-            return Math.log(num) / Math.log(base);
         }
 
     }
