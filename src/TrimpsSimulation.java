@@ -24,8 +24,8 @@ public class TrimpsSimulation {
     public final static double mapSize = 26;
     public final static double dropsPerMap = mapSize / 2d / 3d; // garden drop (1/3 metal) on 1/2 cells
     public final static double minerFraction = 0.99;
-    public final static int packrat = 40;
-    public final static boolean optimizeMaps = false; // true=optimize maps by doing test sims, false=use fixed grid based on damageFactor
+    public final static int packrat = 70;
+    public final static boolean optimizeMaps = true; // true=optimize maps by doing test sims, false=use fixed grid based on damageFactor
     public final static double armorFraction = 0.01; // fraction of metal spent on armor
     private final static double[] mapOffsets = new double[] { 100, 0.75, 0.5,
             0.2, 0.13, 0.08, 0.05, 0.036, 0.03, 0.0275 };
