@@ -42,7 +42,7 @@ public class PerksDeterminator {
         Perks dpPerks = new Perks(perks);
         long startTime = System.nanoTime();
         boolean fineTune = false;
-        int keepTrying = 5;
+        int keepTrying = 3;
         do {
         	bestHeHr = Math.max(heHr, bestHeHr);
 	    	TrimpsSimulation tS = new TrimpsSimulation(dpPerks.getTSFactors(), false, zS);
@@ -52,7 +52,7 @@ public class PerksDeterminator {
         	if (heHr > bestHeHr) {
         		bestHeHr = heHr;
         		bestPerks = new Perks(dpPerks);
-        		keepTrying = 5;
+        		keepTrying = 3;
         	} else if (!fineTune) {
         		fineTune = true;
         		dpPerks = new Perks(bestPerks);
@@ -374,11 +374,11 @@ public class PerksDeterminator {
     		
     	}
     	
-    	System.out.format("perks=%s%nA=%s%nB=%s%nT=%s%n",
-    			Arrays.toString(perks.getPerkLevels()),
-    			Arrays.toString(res[0]),
-    			Arrays.toString(res[1]),
-    			Arrays.toString(res[2]));
+//    	System.out.format("perks=%s%nA=%s%nB=%s%nT=%s%n",
+//    			Arrays.toString(perks.getPerkLevels()),
+//    			Arrays.toString(res[0]),
+//    			Arrays.toString(res[1]),
+//    			Arrays.toString(res[2]));
     	return res;
     }
 
