@@ -7,6 +7,7 @@ public class Perks {
     private int[] perks = new int[Perk.values().length];
     private boolean fineTune = false;
     private DebugFilter df = new DebugFilter(1000);
+    private double buySellInc = 0.03; // percentage of levels to buy or sell at a time (when not fineTuning)
 
     public Perks(final int[] perks, final double helium) {
         totalHelium = helium;
@@ -173,8 +174,6 @@ public class Perks {
     private class BuySellEfficiency {
     	private double buyEfficiency;
     	private double sellEfficiency;
-    	private double hgUpperBound;
-    	private double hgLowerBound;
     	private final double statBase;
     	private final tsFactor statType;
     	private Perk perkToBuy;
@@ -196,7 +195,6 @@ public class Perks {
     			this.statBase = getTSFactor(statType);
     		}
     		calculateEfficiencies();
-    		calculateHeliumGainBounds();
     	}
     	
     	public double getCurrentStatFactor() {
@@ -320,7 +318,6 @@ public class Perks {
     		// carpentry can't calculate its initial efficiencies until it gets duals
     		if (statType == tsFactor.CARPENTRY) {
     			calculateEfficiencies();
-    			calculateHeliumGainBounds();
     		}
     	}
     	
@@ -403,14 +400,6 @@ public class Perks {
 					perkToSell = spire;
 				}
 			}
-    	}
-    	
-    	private void calculateHeliumGainBounds() {
-    		// CARPENTRY can't calculate without duals (will be called again from setDuals)
-    		if (statType == tsFactor.CARPENTRY && duals.length == 0) { return; }
-    		
-    		double hgUpperBound = getHeliumGain(1,T);
-    		double hgLowerBound = getHeliumGain(1/T,T);
     	}
     	
     	public boolean canBuy() {
@@ -539,7 +528,10 @@ public class Perks {
     			//System.out.format("sell perk %s to eff=%.4e: curEff=%.4e%n",
     			//		bse.perk.name(), efficiencyToSell, bse.getSellEfficiency());
     			// TODO? sell more than 1 level at once
-    			bse.adjustPerk(-1);
+    			int levelsToSell = (int) Math.ceil(getLevel(bse.perkToSell) * buySellInc);
+    			levelsToSell = levelsToSell > getLevel(bse.perkToSell) ? 1 : levelsToSell;
+    			levelsToSell = Math.max(1, levelsToSell);
+    			bse.adjustPerk(-levelsToSell);
     		}
     	}
     }
@@ -554,7 +546,11 @@ public class Perks {
     	while (bsEffs[0].canBuy()) {
     		double nextEfficiency = bsEffs[1].canBuy() ? bsEffs[1].getBuyEfficiency() : 0;
     		// loop buying this perk until it's no longer the most efficient
-    		while (bsEffs[0].getBuyEfficiency() >= nextEfficiency && bsEffs[0].adjustPerk(1)) {
+    		Perk p = bsEffs[0].perkToBuy;
+    		int level = getLevel(p);
+    		int levelsToBuy = fineTune ? 1 : (int) Math.max(1, Math.ceil(level * buySellInc));
+    		levelsToBuy = bsEffs[0].canBuy(levelsToBuy) ? levelsToBuy : 1;
+    		while (bsEffs[0].getBuyEfficiency() >= nextEfficiency && bsEffs[0].adjustPerk(levelsToBuy)) {
     			res = true;
     		}
 //    		if (perks[7] > 46343) {
