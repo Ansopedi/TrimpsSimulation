@@ -7,7 +7,7 @@ public class Perks {
     private int[] perks = new int[Perk.values().length];
     private boolean fineTune = false;
     private DebugFilter df = new DebugFilter(1000);
-    private double buySellInc = 0.03; // percentage of levels to buy or sell at a time (when not fineTuning)
+    private double buySellInc = 0.015; // percentage of levels to buy or sell at a time (when not fineTuning)
 
     public Perks(final int[] perks, final double helium) {
         totalHelium = helium;
