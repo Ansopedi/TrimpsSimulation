@@ -4,6 +4,63 @@ public class AveragedZoneSimulation extends ZoneSimulation {
 
     private final static int zoneSimulationRepeatAmount = 1000;
 
+    public static void main(String[] args) {
+        AveragedZoneSimulation a = new AveragedZoneSimulation();
+        System.out.println(a.getExpectedTime(TrimpsSimulation.cellDelay,
+                    TrimpsSimulation.attackDelay,0.04*2.2, TrimpsSimulation.critChance,
+                  TrimpsSimulation.critDamage, TrimpsSimulation.okFactor,
+                 200, TrimpsSimulation.corruptionStart, 550));
+        System.out.println(a.getExpectedTime(TrimpsSimulation.cellDelay,
+                TrimpsSimulation.attackDelay,0.04*2.4, TrimpsSimulation.critChance,
+              TrimpsSimulation.critDamage, TrimpsSimulation.okFactor,
+             200, TrimpsSimulation.corruptionStart, 550));
+        a.calculateMaps(TrimpsSimulation.cellDelay,
+                TrimpsSimulation.attackDelay, TrimpsSimulation.critChance,
+                TrimpsSimulation.critDamage, TrimpsSimulation.okFactor,
+                200, TrimpsSimulation.corruptionStart, 550);
+    }
+
+    private void calculateMaps(final double cellDelay, final double attackDelay,
+            final double critChance, final double critDamage,
+            final double okFactor, final double corruptMod,
+            final int corruptionStart, final int zone) {
+        int runs = 50;
+        double offset = 0.001;
+        double start = 0.5;
+        double mapTicks = 5.2;
+        double damageFactor = start;
+        for (int x = 0; x < 10; x++) {
+            while (true) {
+                double sum = 0;
+                for (int y = 0; y < runs; y++) {
+                    sum += getExpectedTime(cellDelay, attackDelay,
+                            damageFactor * (1 + 0.2 * (x)), critChance,
+                            critDamage, okFactor, corruptMod, corruptionStart,
+                            zone);
+                }
+                double currentAverageTicks = (sum / runs) + (x) * mapTicks;
+                sum = 0;
+                for (int y = 0; y < runs; y++) {
+                    sum += getExpectedTime(cellDelay, attackDelay,
+                            damageFactor * (1 + 0.2 * (x + 1)), critChance,
+                            critDamage, okFactor, corruptMod, corruptionStart,
+                            zone);
+                }
+                double mapAverageTicks = (sum / runs) + (x + 1) * mapTicks;
+                if (mapAverageTicks < currentAverageTicks) {
+                    System.out.println(currentAverageTicks);
+                    System.out.println(mapAverageTicks);
+                    System.out.println("Do " + x + " maps above factor "
+                            + ((double) (((int) (damageFactor * 10000))))
+                                    / 10000);
+                    break;
+                } else {
+                    damageFactor -= offset;
+                }
+            }
+        }
+    }
+
     @Override
     public double getExpectedTime(final double cellDelay,
             final double attackDelay, final double damageFactor,
@@ -12,7 +69,8 @@ public class AveragedZoneSimulation extends ZoneSimulation {
             final int corruptionStart, final int zone) {
         double acc = 0;
         for (int x = 0; x < zoneSimulationRepeatAmount; x++) {
-            EnemyType[] zoneArray = createZone(TrimpsSimulation.getNumCorrupt(zone, corruptionStart));
+            EnemyType[] zoneArray = createZone(
+                    TrimpsSimulation.getNumCorrupt(zone, corruptionStart));
             double res = 0;
             int cell = 1;
             Random random = new Random();
@@ -74,7 +132,7 @@ public class AveragedZoneSimulation extends ZoneSimulation {
             }
             acc += res;
         }
-        return acc/zoneSimulationRepeatAmount;
+        return acc / zoneSimulationRepeatAmount;
     }
 
     // TODO do normal remove better
