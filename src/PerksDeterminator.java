@@ -12,9 +12,9 @@ public class PerksDeterminator {
         // TODO fix all 0 bug
         //int[] perkArray = new int[] { 80, 80, 80, 90, 40000, 20000, 9000, 27000,
         //        59, 80, 44 };
-    	//int[] perkArray = new int[] { 94,92,93,103,99800,64200,22100,83500,60,89,45 };
+    	//int[] perkArray = new int[] {96,94,93,105,131600,86400,27400,103100,61,92,43};
     	int[] perkArray = new int[] { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
-        double totalHelium = 57300000000000d;
+        double totalHelium = 78099000000000d;
         // TODO check for non-bought ones
         Perks perks = new Perks(perkArray, totalHelium);
         PerksDeterminator pD = new PerksDeterminator(perks);
@@ -42,7 +42,7 @@ public class PerksDeterminator {
         Perks dpPerks = new Perks(perks);
         long startTime = System.nanoTime();
         boolean fineTune = false;
-        int keepTrying = 1;
+        int keepTrying = 3;
         do {
         	bestHeHr = Math.max(heHr, bestHeHr);
 	    	TrimpsSimulation tS = new TrimpsSimulation(dpPerks.getTSFactors(), false, zS);
@@ -52,7 +52,7 @@ public class PerksDeterminator {
         	if (heHr > bestHeHr) {
         		bestHeHr = heHr;
         		bestPerks = new Perks(dpPerks);
-        		keepTrying = 1;
+        		keepTrying = 3;
         	} else if (!fineTune) {
         		fineTune = true;
         		dpPerks = new Perks(bestPerks);
@@ -60,7 +60,7 @@ public class PerksDeterminator {
         		break;
         	}
 	    	//long time = System.nanoTime();
-	    	double[][] rawEffs = calcPerkEfficiencies(dpPerks, zS, sR, 1);
+	    	double[][] rawEffs = calcPerkEfficiencies(dpPerks, zS, sR, fineTune, 1);
 	    	//long time2 = System.nanoTime();
 	    	//System.out.println((time2-time)/1000000l + "ms to run sims");
 	    	// 
@@ -135,77 +135,250 @@ public class PerksDeterminator {
     // -but do note there can be butterfly effects (related to specific prestige buys late in the run
     //  that may result in insufficient fidelity with small effect sizes
     private static double[][] calcPerkEfficiencies( Perks perks, ZoneSimulation zS,
-    		SimulationResult resBase, int debug) {
+    		SimulationResult resBase, boolean fineTune, int debug) {
     	double[] tsFactors = perks.getTSFactors();
-    	double[] testFactors = new double[Perks.numTSFactors];
+    	double[] testFactors = Arrays.copyOf(tsFactors, Perks.numTSFactors);
     	double hehrBase = resBase.getHehr();
-    	double[][] res = new double[2][Perks.numTSFactors];
+    	double[][] res = new double[3][Perks.numTSFactors];
     	TrimpsSimulation tS;
+    	
+		SimulationResult nextRes = resBase;
+		SimulationResult curRes = resBase;
+		SimulationResult lastRes = resBase;
+		// loop selling coord until both the last point and the next point have value
+		while (nextRes.getHehr() <= curRes.getHehr() || curRes.getHehr() <= lastRes.getHehr()) {
+			
+			nextRes = curRes;
+			curRes = lastRes;
+			
+			testFactors[Perks.tsFactor.COORDINATED.ordinal()]
+					= Perks.calcCoordFactor(perks.getLevel(Perk.COORDINATED) - 1);
+			tS = new TrimpsSimulation(testFactors, false, zS);
+			lastRes = tS.runSimulation(debug-1);
+			
+			if (lastRes.getHehr() < curRes.getHehr()) {
+				if (nextRes == resBase) {
+					// still need to test +1 point if -1 point had an effect on the first try
+					testFactors[Perks.tsFactor.COORDINATED.ordinal()]
+							= Perks.calcCoordFactor(perks.getLevel(Perk.COORDINATED) + 1);
+					tS = new TrimpsSimulation(testFactors, false, zS);
+					nextRes = tS.runSimulation(debug-1);
+					if (nextRes.getHehr() <= curRes.getHehr()) {
+						// next point has no effect, sell one and try again
+						perks.buyPerk(Perk.COORDINATED, -1);
+					} else {
+						// we're done, will exit the loop (lastres<curres, and nextres>curRes)
+					}
+				} else if (nextRes.getHehr() <= curRes.getHehr()) {
+					perks.buyPerk(Perk.COORDINATED, -1);
+				} else {
+					// we're done if both points had effect
+				}
+			} else {
+				// last point had no effect, sell one and try again
+				perks.buyPerk(Perk.COORDINATED, -1);
+			}
+		}
+		resBase = curRes;
+		hehrBase = resBase.getHehr();
+		tsFactors = perks.getTSFactors();
+		
+		// now we are at a coord level where the last point and next point have value
+		
+		double coordNextGain = nextRes.getHehr() / hehrBase;
+		double coordLastGain = hehrBase / lastRes.getHehr();
+		
+		// TODO: trying to eliminate the next-point-of-coord-is-worthless stuff
+		// these may be used in cases where coordNextGain == 1 so that coord needs a special derivation
+		double carpNextGain = 0;
+		double carpLastGain = 0;
+		double Tcarp = 0;
+		
+		// For any given tsFactor ("stat"), we simulate *testEffect and /testEffect. (Call testEffect "T".)
+		// -> Really we may use powers of T if necessary to notice an effect, and pass the final adjustment as a result.
+		// Then we use these simulation results to get parameters for the following model:
+		//
+		// Let H(X,Y) = <hehr at stat X*Y> / <hehr at stat X>,
+		// 	where X is the stat gain factor relative to baseline perks.
+		// Now for an infinitesimal gain 'e' (i.e. limit as e approaches 1 from above), we have:
+		// 	H(X,e) = e^G(X) for some function G, which we could call the "local helium gain exponent".
+		// We model G(X) as linear in the log of X:
+		//	G(X) = A + B * log(X,T)
+		// Skipping over the long derivation, we can calculate total helium gain as follows:
+		// 	H(X,Y) = Y^(A + B * log(X,T) + (B/2) * log(Y,T))
+		// We aim to calculate A and B for each perk, knowing the values of:
+		// H(1/T,T) = hehrBase / lastRes.getHehr();
+		// H(1,T) = nextRes.getHehr() / hehrBase;
+		// With these values A and B, we can calculate H(X,Y) for buying or selling any amount of any perk,
+		// 	where X accounts for stat gain redundancies between different perks.
+		// e.g. "X" for motivation is really the motivation factor (over baseline) TIMES the carpentry factor.
+		
     	for ( Perks.tsFactor f : Perks.tsFactor.values() ) {
-    		double adjust = f.testEffect;
+    		
+    		// coord gain is already calculated 
+    		if (f == Perks.tsFactor.COORDINATED) { continue; }
+    		
+    		double T = f.testEffect;
     		testFactors = Arrays.copyOf(tsFactors, Perks.numTSFactors);
-    		SimulationResult plusTest = resBase;
-    		SimulationResult minusTest;
-    		if (adjust == 1) { // test point by point instead of changing the stat directly
-    			boolean soldPoint = false;
-    			do {
-    				testFactors[f.ordinal()] = Perks.calcCoordFactor(perks.getLevel(f.base) - 1);
-    				tS = new TrimpsSimulation(testFactors, false, zS);
-    				minusTest = tS.runSimulation(debug-1);
-    				if (minusTest.getHehr() == hehrBase) {
-        				// loop testing -1 point and selling a point if it had no effect
-    					soldPoint = perks.buyPerk(Perk.COORDINATED, -1);
-    				} else if (!soldPoint) {
-    					// or if -1 point has an effect, test +1 point also
-    					testFactors[f.ordinal()] = Perks.calcCoordFactor(perks.getLevel(f.base) + 1);
-    					tS = new TrimpsSimulation(testFactors, false, zS);
-    					plusTest = tS.runSimulation(debug-1);
-    				} else {
-    					// if we sold any points, we know the next point has no effect
-    					soldPoint = false;
-    				}
-    			} while (soldPoint);
-    			// for point by point perks, just return hehr factors for +1 and -1
-    			res[0][f.ordinal()] = plusTest.getHehr() / hehrBase;
-    			res[1][f.ordinal()] = hehrBase / minusTest.getHehr();
-    		} else {
-    			// TODO the perks efficiency calculation should assume no further efficiency change beyond the effect size
-    			double plusEff;
-    			double minusEff;
-    			double logBase;
-    			while (true) {
-    				testFactors[f.ordinal()] = tsFactors[f.ordinal()] * adjust;
-    				tS = new TrimpsSimulation(testFactors, false, zS);
-    				plusTest = tS.runSimulation(debug-1);
-    				testFactors[f.ordinal()] = tsFactors[f.ordinal()] / adjust;
-    				tS = new TrimpsSimulation(testFactors, false, zS);
-    				minusTest = tS.runSimulation(debug-1);
-    				logBase = Math.abs(Math.log(adjust));
-    				plusEff = Math.log(plusTest.getHehr() / hehrBase) / logBase;
-    				minusEff = Math.log(hehrBase / minusTest.getHehr()) / logBase;
-    				if (plusEff > 0 || minusEff > 0) {
-    					// plusEff floor is 0 - possible to have no effect, but assume negative effect is not real (butterfly)
-    					plusEff = plusEff < 0 ? 0 : plusEff;
-    					// we can't handle minusEff of zero, so if it was swamped by butterfly effect just use plusEff
-    					minusEff = minusEff <= 0 ? plusEff : minusEff;
-    					break;
-    				} else {
-    					// if there was no measurable effect, try a bigger effect size
-    					adjust *= adjust;
-    				}
-    			}
-    			// interpolated efficiency at baseline
-    			res[0][f.ordinal()] = (plusEff + minusEff) / 2d;
-    			// slope of efficiency curve between max/min adjusted effects,
-    			// 	normalized to the testEffect range (since we may end up clamping to this range)
-    			// -> at /adjust, efficiency is (baseEff - slope)
-    			// -> at *adjust, efficiency is (baseEff + slope)
-    			res[1][f.ordinal()] = (plusEff - minusEff) / 2d / logBase * Math.abs(Math.log(f.testEffect));
-    		}	
+    		double nextGain = 0;
+    		double lastGain = 0;
+			while (true) {
+				// bail out with an error if we haven't found an effect for T = max double
+				// -> something is very wrong if we gain no hehr with zillions of times more of a stat
+				// -> this could happen for coord but this loop doesn't do coord
+				if (T >= Double.MAX_VALUE/f.testEffect/2d) {
+					throw new Error("We expect all non-coord perks to have some effect!%n");
+				}
+				
+				testFactors[f.ordinal()] = tsFactors[f.ordinal()] * T;
+				tS = new TrimpsSimulation(testFactors, false, zS);
+				nextRes = tS.runSimulation(debug-1);
+				testFactors[f.ordinal()] = tsFactors[f.ordinal()] / T;
+				tS = new TrimpsSimulation(testFactors, false, zS);
+				lastRes = tS.runSimulation(debug-1);
+
+				nextGain = nextRes.getHehr() / hehrBase;
+				lastGain = hehrBase / lastRes.getHehr();
+				
+				// for looting we always get a gain of 1 from the helium alone,
+				//	so try a bigger adjust if that's all we got
+				double gainComp = f == Perks.tsFactor.LOOTING ? 1 : 0;
+				if (nextGain > gainComp && lastGain > gainComp) {
+					break;
+				} else {
+					// if there was no measurable effect, try a bigger effect size
+					T *= T;
+				}
+			}
+			
+			// the coord derivations need to know about carp gain stats
+			if (f == Perks.tsFactor.CARPENTRY) {
+				carpNextGain = nextGain;
+				carpLastGain = lastGain;
+				Tcarp = T;
+				// and if the next point of coord is worthless, carp has a totally different derivation
+				//	so skip the rest of the normal derivation
+				if (coordNextGain == 1) { continue; }
+			}
+			
+			// Skipping derivations again:
+			// A = log(sqrt(nextGain*lastGain),T)
+			// B = 2 * (A - log(lastGain,T))
+			double A = Math.log(Math.sqrt(nextGain * lastGain)) / Math.log(T);
+			double B = 2 * ( A - Math.log(lastGain) / Math.log(T) );
+			res[0][f.ordinal()] = A;
+			res[1][f.ordinal()] = B;
+			res[2][f.ordinal()] = T;
+			
+			// by the model, we should also have B<adjust> = 2 * (log(nextGain,adjust) - A),
+			//	so print out the results to check how close the model approaches reality
+			double Bprime = 2 * ( Math.log(nextGain) / Math.log(T) - A );
+			if (Math.abs(B/Bprime - 1d ) > .1) { 
+				System.out.println("WARNING: large divergence between B and B', model may not be so good :(");
+				System.out.format("For %s, B=%.2e B'=%.2e%n", f.name(), B, Bprime); 
+			}
     	}
     	
-    	System.out.format("perks=%s%nbaseEff=%s%nslopeEff=%s%n",
-    			Arrays.toString(perks.getPerkLevels()), Arrays.toString(res[0]), Arrays.toString(res[1]));
+    	// once we have all the basic perks covered, we need to derive A, B, and population-equivalent T for coord
+    	// -> and possibly parameters for carp if the next point of coord is worthless
+    	
+    	// the normal case, where coord's next point has value
+    	
+		double Amot = res[0][Perks.tsFactor.MOTIVATION.ordinal()];
+		double Bmot = res[1][Perks.tsFactor.MOTIVATION.ordinal()];
+		// scale from motivation factor to the equivalent population factor (some resources come from loot instead)
+		double logTmot = Math.log((res[2][Perks.tsFactor.MOTIVATION.ordinal()] - 1) * nextRes.motiFraction + 1);
+		double logTcarp = Math.log(Tcarp);
+    	if (coordNextGain > 1) {
+    		// We know carpentry is simply the aggregate of gains from mot, loot (excluding helium), and coord:
+    		// 	A<carp> =
+    		//		A<mot>*log(T<carp>,T<mot>)
+    		//		+ (A<loot> - 1)*log(T<carp>,T<mot>)
+    		//		+ A<coord>*log(T<carp>,T<coord>)
+    		// And as with other perks, for coord we have:
+    		// 	T^A = sqrt(nextGain * lastGain)
+    		// These two equations allow us to eventually derive:
+    		// 	A<coord>^2 =
+    		//		(A<carp> - A<mot>*log(T<carp>,T<mot> - (A<loot> - 1)*log(T<carp>,T<mot>))
+    		//		* log(sqrt(nextGain * lastGain),T<carp>)
+    		//	T<coord> = (sqrt(nextGain * lastGain)^(1/A<coord>)
+    		double Acarp = res[0][Perks.tsFactor.CARPENTRY.ordinal()];
+    		double coordGainMean = Math.sqrt(coordNextGain * coordLastGain);
+    		double A = Acarp / logTcarp - Amot / logTmot;
+    		A *= Math.log(coordGainMean);
+    		A = Math.sqrt(A);
+    		double T = Math.pow(coordGainMean, 1/A);
+    		
+    		// Once we have A and T, B is calculated as for other perks:
+			double B = 2 * ( A - Math.log(coordLastGain) / Math.log(T) );
+
+//			System.out.format("Acarp=%.2e logTcarp=%.2f Amot=%.2e logTmot=%.2f Aloot=%.2e logTloot=%.2f%n",
+//					Acarp, logTcarp, Amot, logTmot, Aloot, logTloot);
+			
+			res[0][Perks.tsFactor.COORDINATED.ordinal()] = A;
+			res[1][Perks.tsFactor.COORDINATED.ordinal()] = B;
+			res[2][Perks.tsFactor.COORDINATED.ordinal()] = T;
+			
+			// carpentry is always calculated from coord and mot, but needs to know the fraction of 
+			// resources that come from motivation
+			res[2][Perks.tsFactor.CARPENTRY.ordinal()] = nextRes.motiFraction;
+			
+			// as with other perks, check that the model gives similar results for the two derivations of B:
+			double Bprime = 2 * ( Math.log(coordNextGain) / Math.log(T) - A );
+			if (Math.abs(B/Bprime - 1d ) > .1) { 
+				System.out.println("WARNING: large divergence between B and B', model may not be so good :("); 
+				System.out.format("For %s, B=%.2e B'=%.2e%n", "COORDINATED", B, Bprime);
+			}
+    	} else {
+    		
+    		throw new Error ("Next point of coord should always have value in the current paradigm!%n");
+//    		
+//    		// Next point of coord has no value, so use alternate model for H<carp> and H<coord>
+//    		//	Above baseline, more coord does nothing.
+//    		//	Below baseline, we use a calculated slope B.
+//    		//	For carp, we calculate H directly from the mot/loot/coord effects,
+//    		//		using the A/B/T values for those perks (and 0 coord effect above baseline).
+//    		
+//    		// local helium gain exponent at baseline (aka "A") is 0: more coord does nothing.
+//    		res[0][Perks.tsFactor.COORDINATED.ordinal()] = 0;
+//    		
+//    		// carpLastGain
+//    		//	= H<carp>(1/Tcarp,Tcarp)
+//    		//	= H<mot>(1/Tcarp,Tcarp) * H<loot>(1/Tcarp,Tcarp) * H<coord>(1/Tcarp,Tcarp)
+//    		// (with H<loot> excluding direct helium gain, since we subtracted 1 from Aloot)
+//    		// Solve for H<coord>(1/Tcarp,Tcarp):
+//    		double Hmot = Math.pow(Tcarp, Amot - Bmot / 2d * logTcarp / logTmot);
+//    		double Hcoord = carpLastGain / Hmot;
+//    		
+//    		
+//    		// H<coord>(1/Tcarp,Tcarp)
+//    		//	= Tcarp^(A + B*log(1/Tcarp,Tcoord) + (B/2)*log(Tcarp,Tcoord))
+//    		// 		note A = 0 and log(1/Tcarp) = -log(Tcarp)
+//    		//	= Tcarp^((-B/2)*log(Tcarp,Tcoord))
+//    		// And coordLastGain
+//    		//		= H<coord>(1/Tcoord,Tcoord)
+//    		//		= Tcoord^(-B/2)
+//    		// Solving for T<coord>:
+//    		//	Tcoord = Tcarp ^ sqrt(log(coordLastGain,Hcoord))
+//    		double T = Math.log(coordLastGain) / Math.log(Hcoord);
+//    		T = Math.pow(Tcarp, Math.sqrt(T));
+//    		double B = -2 * (Math.log(coordLastGain) / Math.log(T));
+//
+//    		res[1][Perks.tsFactor.COORDINATED.ordinal()] = B;
+//    		res[2][Perks.tsFactor.COORDINATED.ordinal()] = T;
+//    		
+//    		// for carp, it's not that A/B/T are truly 0, but this tells H<carp> to use the alternate model.
+//    		res[0][Perks.tsFactor.CARPENTRY.ordinal()] = 0;
+//    		res[1][Perks.tsFactor.CARPENTRY.ordinal()] = 0;
+//    		res[2][Perks.tsFactor.CARPENTRY.ordinal()] = 0;
+    		
+    	}
+    	
+//    	System.out.format("perks=%s%nA=%s%nB=%s%nT=%s%n",
+//    			Arrays.toString(perks.getPerkLevels()),
+//    			Arrays.toString(res[0]),
+//    			Arrays.toString(res[1]),
+//    			Arrays.toString(res[2]));
     	return res;
     }
 
