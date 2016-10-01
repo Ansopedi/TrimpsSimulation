@@ -7,7 +7,10 @@ public class Perks {
     private int[] perks = new int[Perk.values().length];
     private boolean fineTune = false;
     private DebugFilter df = new DebugFilter(1000);
-    private double buySellInc = 0.015; // percentage of levels to buy or sell at a time (when not fineTuning)
+    private final double BUY_SELL_INC = 0.02; // percentage of levels to buy or sell at a time (when not fineTuning)
+    private final double COARSE_BUY_INC = 0.1; // percentage of levels to buy during coarseBuy step
+    private final double FINE_TUNE_CLAMP_POWER = 0.3; // how tightly to control buy/sell range during fineTune
+    private boolean coarseBuy;
 
     public Perks(final int[] perks, final double helium) {
         totalHelium = helium;
@@ -214,6 +217,8 @@ public class Perks {
     		return T;
     	}
     	
+    	// motivation uses a different effect size when being used to calculate for carpentry
+    	// -> since carp affects all resources while motivation doesn't affect non-J/C loot drops
     	public void setT(double T) {
     		this.T = T;
     	}
@@ -224,6 +229,8 @@ public class Perks {
     			boolean doUpperBoundCheck, boolean doLowerBoundCheck) {
     		
     		double res;
+    		
+    		double clamp = fineTune ? Math.pow(T, FINE_TUNE_CLAMP_POWER) : T;
     		
     		// carpentry is always calculated directly from mot/loot/coord
     		if (statType == tsFactor.CARPENTRY) {
@@ -248,10 +255,10 @@ public class Perks {
     			}
     		}
     		// if some portion of the range is outside the lower sim bound, apply clamping
-    		else if (doLowerBoundCheck && X * T < 1) {
+    		else if (doLowerBoundCheck && X * clamp < 1) {
 				// entire range is outside the sim bound, calculate result directly
-				if (X * Y * T <= 1) {
-					res = getClampedHeliumGain(X, Y, true);
+				if (X * Y * clamp <= 1) {
+					res = getClampedHeliumGain(X, Y, clamp, true);
 				} else {
 					//if (df.filter(true)) {
 					//	System.out.format("XT-1=%.2e XYT-1=%.2e X=%.2e Y=%.2e T=%.2e%n", X*T-1, X*Y*T-1, X, Y, T);
@@ -260,23 +267,23 @@ public class Perks {
 					// decompose into portions divided by the sim bound
 					
 					// get the clamped result for the portion below the bound
-					res = getClampedHeliumGain(X, 1 / T / X, true);
+					res = getClampedHeliumGain(X, 1 / clamp / X, clamp, true);
 					// compound with the portion above the lower bound, skipping the lower bound check
-					res *= getHeliumGain(1/T, X * Y * T, false, doUpperBoundCheck);
+					res *= getHeliumGain(1/clamp, X * Y * clamp, false, doUpperBoundCheck);
 				}
     		}
     		// if some portion of the range is outside the upper sim bound, apply clamping
-    		else if (doUpperBoundCheck && X * Y / T > 1) {
-    			if (X / T >= 1) {
+    		else if (doUpperBoundCheck && X * Y / clamp > 1) {
+    			if (X / clamp >= 1) {
         			// entire range is outside the sim bound, calculate result directly
-    				res = getClampedHeliumGain(X, Y, false);
+    				res = getClampedHeliumGain(X, Y, clamp, false);
     			} else {
     				// decompose into portions divided by the sim bound
     				
     				// get the portion below the upper bound, skipping the upper bound check
-    				res = getHeliumGain(X, T / X, doLowerBoundCheck, false);
+    				res = getHeliumGain(X, clamp / X, doLowerBoundCheck, false);
     				// compound with the clamped portion above the upper bound
-    				res *= getClampedHeliumGain(T, X * Y / T, false);
+    				res *= getClampedHeliumGain(clamp, X * Y / clamp, clamp, false);
     			}
     		} else {
     			// standard model when the entire range is inside the sim bounds
@@ -288,26 +295,28 @@ public class Perks {
 //    				getLevel(statType.base),statType.hasSpirePerk() ? getLevel(statType.spire) : "none");
 //    		}
     		// final clamp at no value, just in case - we can't handle negative helium gains (which are presumed to be fake)
-    		return Math.max(1, res);
+    		return Math.max((statType == tsFactor.LOOTING ? Y : 1), res);
     	}
     	
-    	private double getClampedHeliumGain( double X, double Y, boolean belowLowerBound ) {
+    	private double getClampedHeliumGain( double X, double Y, double clamp, boolean belowLowerBound ) {
     		double res;
     		if (belowLowerBound) {
-	    		if (statType == tsFactor.COORDINATED) {
+    			// in fineTune step, strongly discourage selling below the clamp range
+	    		if (statType == tsFactor.COORDINATED && !coarseBuy || fineTune) {
 					// exponent gets larger and larger with decreasing X
-					res = Math.pow(Y, (A - B) / Math.sqrt(X * Math.sqrt(Y) * T));
+					res = Math.pow(Y, (A - B * Math.log(clamp) / Math.log(T)) / (X * Math.sqrt(Y) * clamp));
 				} else {
 					// perks other than coord use a fixed clamp outside the sim bounds
-					res = Math.pow(Y, A - B);
+					res = Math.pow(Y, A - B * Math.log(clamp) / Math.log(T));
 				}
     		} else {
-    			if (statType == tsFactor.COORDINATED) {
+    			// in the fineTune step, strongly discourage buying above the clamp range
+    			if (statType == tsFactor.COORDINATED && !coarseBuy || fineTune) {
 					// exponent gets smaller and smaller with increasing X
-					res = Math.pow(Y, (A + B) / Math.sqrt(X * Math.sqrt(Y) / T));
+					res = Math.pow(Y, (A + B * Math.log(clamp) / Math.log(T)) / (X * Math.sqrt(Y) / clamp));
 				} else {
 					// perks other than coord use a fixed clamp outside the sim bound
-					res = Math.pow(Y, A + B);
+					res = Math.pow(Y, A + B * Math.log(clamp) / Math.log(T));
 				}
     		}
     		return res;
@@ -403,11 +412,23 @@ public class Perks {
     	}
     	
     	public boolean canBuy() {
-    		return canBuy(1);
+    		if ( coarseBuy ) {
+        		return canBuy((int) Math.max(1, Math.ceil(getLevel(perkToBuy) * COARSE_BUY_INC)));
+    		} else {
+    			return canBuy(1);
+    		}
     	}
     	
     	public boolean canBuy(int amount) {
-    		return helium >= perkCost(perkToBuy, amount);
+    		double TE = (statType == tsFactor.COORDINATED ? this.T : statType.testEffect);
+    		if ( coarseBuy
+    			&& ( TE > 1 && getTSFactor(perkToBuy, getLevel(perkToBuy) + amount) * TE > 1
+        			|| TE <= 1 && getTSFactor(perkToBuy, getLevel(perkToBuy) + amount) * TE < 1)
+    			) {
+    			return false;
+    		} else {
+    			return helium >= perkCost(perkToBuy, amount);
+    		}
     	}
     	
     	public tsFactor getStatType() {
@@ -487,22 +508,39 @@ public class Perks {
     	bsEffs[tsFactor.CARPENTRY.ordinal()].setDuals(new BuySellEfficiency[] {
     			bsEffs[tsFactor.MOTIVATION.ordinal()],
     			bsEffs[tsFactor.COORDINATED.ordinal()]
+    			,bsEffs[tsFactor.LOOTING.ordinal()] // TODO: why does factoring in looting make things worse?
     	});
     	bsEffs[tsFactor.COORDINATED.ordinal()].setDuals(new BuySellEfficiency[] {
     			bsEffs[tsFactor.CARPENTRY.ordinal()]
     	});
     	bsEffs[tsFactor.MOTIVATION.ordinal()].setDuals(new BuySellEfficiency[] {
     			bsEffs[tsFactor.CARPENTRY.ordinal()]
+    			,bsEffs[tsFactor.LOOTING.ordinal()]
     	});
     	bsEffs[tsFactor.LOOTING.ordinal()].setDuals(new BuySellEfficiency[] {
     			bsEffs[tsFactor.CARPENTRY.ordinal()]
+    			,bsEffs[tsFactor.MOTIVATION.ordinal()]
     	});
+    	
 	
 
 		// sell least-efficient perks until we are sure none are over-bought (see method for further description)
     	// -> no need to track whether we did anything, because if we did,
     	//	then buyMostEfficientPerks will do something and return true
 		sellLeastEfficientPerks(bsEffs);
+    	
+
+//    	// reset perks
+//    	perks = new int[Perk.values().length];
+//    	helium = totalHelium;
+//    	for (BuySellEfficiency bse : bsEffs) {
+//    		bse.calculateEfficiencies();
+//    	}
+//    	
+//    	// and do a coarse buy step where we have a hard clamp at the lower end of the sim range
+//    	coarseBuy = true;
+//    	buyMostEfficientPerks(bsEffs);
+//    	coarseBuy = false;
 		
 //		System.out.println("after sell:");
 //    	for ( int i = 0; i < bsEffs.length; i++ ) {
@@ -510,7 +548,7 @@ public class Perks {
 //    				bsEffs[i].getStatType().name(), bsEffs[i].getBuyEfficiency(), bsEffs[i].getSellEfficiency());
 //    	}
 	
-		System.out.format("perks after sell: %s%n", Arrays.toString(perks));
+		System.out.format("perks after coarse buy: %s%n", Arrays.toString(perks));
 	
 		// then buy most-efficient perks until we run out of helium
 		return buyMostEfficientPerks(bsEffs);
@@ -528,7 +566,7 @@ public class Perks {
     			//System.out.format("sell perk %s to eff=%.4e: curEff=%.4e%n",
     			//		bse.perk.name(), efficiencyToSell, bse.getSellEfficiency());
     			// TODO? sell more than 1 level at once
-    			int levelsToSell = (int) Math.ceil(getLevel(bse.perkToSell) * buySellInc);
+    			int levelsToSell = (int) Math.ceil(getLevel(bse.perkToSell) * BUY_SELL_INC);
     			levelsToSell = levelsToSell > getLevel(bse.perkToSell) ? 1 : levelsToSell;
     			levelsToSell = Math.max(1, levelsToSell);
     			bse.adjustPerk(-levelsToSell);
@@ -548,7 +586,8 @@ public class Perks {
     		// loop buying this perk until it's no longer the most efficient
     		Perk p = bsEffs[0].perkToBuy;
     		int level = getLevel(p);
-    		int levelsToBuy = fineTune ? 1 : (int) Math.max(1, Math.ceil(level * buySellInc));
+    		double toBuyInc = coarseBuy ? COARSE_BUY_INC : BUY_SELL_INC;
+    		int levelsToBuy = fineTune ? 1 : (int) Math.max(1, Math.ceil(level * toBuyInc));
     		levelsToBuy = bsEffs[0].canBuy(levelsToBuy) ? levelsToBuy : 1;
     		while (bsEffs[0].getBuyEfficiency() >= nextEfficiency && bsEffs[0].adjustPerk(levelsToBuy)) {
     			res = true;

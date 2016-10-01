@@ -14,7 +14,7 @@ public class PerksDeterminator {
         //        59, 80, 44 };
     	//int[] perkArray = new int[] {96,94,93,105,131600,86400,27400,103100,61,92,43};
     	int[] perkArray = new int[] { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
-        double totalHelium = 78099000000000d;
+        double totalHelium = 12.2e+9;
         // TODO check for non-bought ones
         Perks perks = new Perks(perkArray, totalHelium);
         PerksDeterminator pD = new PerksDeterminator(perks);

@@ -6,25 +6,25 @@ import java.util.List;
 public class TrimpsSimulation {
 
     public final static int goldenFrequency = 30;
-    public final static int blacksmitheryZone = 299;
-    public final static double critChance = 0.726;
-    public final static double critDamage = 13.7;
-    public final static double cellDelay = 0.4;
-    public final static double attackDelay = 0.258;
-    public final static double okFactor = 0.15;
-    public final static double achievementDamage = 14.352;
-    public final static double heirloomDamage = 5.7;
-    public final static double robotrimpDamage = 7.6;
-    public final static double heirloomMetalDrop = 6.04;
-    public final static double heirloomMinerEff = 6.12;
-    public final static int corruptionStart = 151;
-    public final static double turkimpMod = 1.75;
+    public final static int blacksmitheryZone = 151;
+    public final static double critChance = 0.662;
+    public final static double critDamage = 11;
+    public final static double cellDelay = 0.5;
+    public final static double attackDelay = 0.358;
+    public final static double okFactor = 0.075;
+    public final static double achievementDamage = 12.902;
+    public final static double heirloomDamage = 4.1;
+    public final static double robotrimpDamage = 3.4;
+    public final static double heirloomMetalDrop = 3.8;
+    public final static double heirloomMinerEff = 4.2;
+    public final static int corruptionStart = 166;
+    public final static double turkimpMod = 1.5;
     public final static double turkimpDropMod = (turkimpMod == 1.75) ? 1.249 : 1.166;
     public final static double dropsPerZone = 17;
-    public final static double mapSize = 26;
+    public final static double mapSize = 28;
     public final static double dropsPerMap = mapSize / 2d / 3d; // garden drop (1/3 metal) on 1/2 cells
-    public final static double minerFraction = 0.99;
-    public final static int packrat = 70;
+    public final static double minerFraction = 0.98;
+    public final static int packrat = 40;
     public final static boolean optimizeMaps = true; // true=optimize maps by doing test sims, false=use fixed grid based on damageFactor
     public final static double armorFraction = 0.01; // fraction of metal spent on armor
     private final static double[] mapOffsets = new double[] { 100, 0.75, 0.5,
