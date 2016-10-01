@@ -8,9 +8,7 @@ public class Perks {
     private boolean fineTune = false;
     private DebugFilter df = new DebugFilter(1000);
     private final double BUY_SELL_INC = 0.02; // percentage of levels to buy or sell at a time (when not fineTuning)
-    private final double COARSE_BUY_INC = 0.1; // percentage of levels to buy during coarseBuy step
     private final double FINE_TUNE_CLAMP_POWER = 0.3; // how tightly to control buy/sell range during fineTune
-    private boolean coarseBuy;
 
     public Perks(final int[] perks, final double helium) {
         totalHelium = helium;
@@ -302,7 +300,7 @@ public class Perks {
     		double res;
     		if (belowLowerBound) {
     			// in fineTune step, strongly discourage selling below the clamp range
-	    		if (statType == tsFactor.COORDINATED && !coarseBuy || fineTune) {
+	    		if (statType == tsFactor.COORDINATED || fineTune) {
 					// exponent gets larger and larger with decreasing X
 					res = Math.pow(Y, (A - B * Math.log(clamp) / Math.log(T)) / (X * Math.sqrt(Y) * clamp));
 				} else {
@@ -311,7 +309,7 @@ public class Perks {
 				}
     		} else {
     			// in the fineTune step, strongly discourage buying above the clamp range
-    			if (statType == tsFactor.COORDINATED && !coarseBuy || fineTune) {
+    			if (statType == tsFactor.COORDINATED || fineTune) {
 					// exponent gets smaller and smaller with increasing X
 					res = Math.pow(Y, (A + B * Math.log(clamp) / Math.log(T)) / (X * Math.sqrt(Y) / clamp));
 				} else {
@@ -412,23 +410,11 @@ public class Perks {
     	}
     	
     	public boolean canBuy() {
-    		if ( coarseBuy ) {
-        		return canBuy((int) Math.max(1, Math.ceil(getLevel(perkToBuy) * COARSE_BUY_INC)));
-    		} else {
-    			return canBuy(1);
-    		}
+    		return canBuy(1);
     	}
     	
     	public boolean canBuy(int amount) {
-    		double TE = (statType == tsFactor.COORDINATED ? this.T : statType.testEffect);
-    		if ( coarseBuy
-    			&& ( TE > 1 && getTSFactor(perkToBuy, getLevel(perkToBuy) + amount) * TE > 1
-        			|| TE <= 1 && getTSFactor(perkToBuy, getLevel(perkToBuy) + amount) * TE < 1)
-    			) {
-    			return false;
-    		} else {
-    			return helium >= perkCost(perkToBuy, amount);
-    		}
+    		return helium >= perkCost(perkToBuy, amount);
     	}
     	
     	public tsFactor getStatType() {
@@ -527,15 +513,9 @@ public class Perks {
 		// sell least-efficient perks until we are sure none are over-bought (see method for further description)
     	// -> no need to track whether we did anything, because if we did,
     	//	then buyMostEfficientPerks will do something and return true
-		sellLeastEfficientPerks(bsEffs);
+		//sellLeastEfficientPerks(bsEffs);
     	
-
-//    	// reset perks
-//    	perks = new int[Perk.values().length];
-//    	helium = totalHelium;
-//    	for (BuySellEfficiency bse : bsEffs) {
-//    		bse.calculateEfficiencies();
-//    	}
+    	sellPerksToTestFloor(bsEffs);
 //    	
 //    	// and do a coarse buy step where we have a hard clamp at the lower end of the sim range
 //    	coarseBuy = true;
@@ -548,7 +528,7 @@ public class Perks {
 //    				bsEffs[i].getStatType().name(), bsEffs[i].getBuyEfficiency(), bsEffs[i].getSellEfficiency());
 //    	}
 	
-		System.out.format("perks after coarse buy: %s%n", Arrays.toString(perks));
+		System.out.format("perks after initial sell: %s%n", Arrays.toString(perks));
 	
 		// then buy most-efficient perks until we run out of helium
 		return buyMostEfficientPerks(bsEffs);
@@ -574,6 +554,21 @@ public class Perks {
     	}
     }
     
+    // sell all perks until they are down to the minimum test-effect from the sim runs
+    private void sellPerksToTestFloor(BuySellEfficiency[] bsEffs) {
+    	for ( BuySellEfficiency bse : bsEffs ) {
+    		double T = (bse.statType == tsFactor.CARPENTRY ? tsFactor.CARPENTRY.testEffect : bse.getT());
+    		while (getLevel(bse.perkToSell) > 0 &&
+    				(T > 1 ?
+    				bse.getCurrentStatFactor() > 1/T :
+    				bse.getCurrentStatFactor() < 1/T)) {
+    			int levelsToSell = fineTune ? 1 : (int) Math.ceil(getLevel(bse.perkToSell) * BUY_SELL_INC);
+    			levelsToSell = Math.max(1, levelsToSell);
+    			bse.adjustPerk(-levelsToSell);
+    		}
+    	}
+    }
+    
     private boolean buyMostEfficientPerks(BuySellEfficiency[] bsEffs) {
     	boolean res = false;
     	
@@ -586,8 +581,7 @@ public class Perks {
     		// loop buying this perk until it's no longer the most efficient
     		Perk p = bsEffs[0].perkToBuy;
     		int level = getLevel(p);
-    		double toBuyInc = coarseBuy ? COARSE_BUY_INC : BUY_SELL_INC;
-    		int levelsToBuy = fineTune ? 1 : (int) Math.max(1, Math.ceil(level * toBuyInc));
+    		int levelsToBuy = fineTune ? 1 : (int) Math.max(1, Math.ceil(level * BUY_SELL_INC));
     		levelsToBuy = bsEffs[0].canBuy(levelsToBuy) ? levelsToBuy : 1;
     		while (bsEffs[0].getBuyEfficiency() >= nextEfficiency && bsEffs[0].adjustPerk(levelsToBuy)) {
     			res = true;
