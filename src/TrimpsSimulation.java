@@ -71,18 +71,18 @@ public class TrimpsSimulation {
         TrimpsSimulation tS = new TrimpsSimulation(p.getTSFactors(), false,
                 //new AveragedZoneSimulation());
         		new ProbabilisticZoneModel(critChance, critDamage, okFactor));
-        double highestHeHr = 0;
-        SimulationResult sR = tS.runSimulation();
+        SimulationResult sR = tS.runSimulation(0, 0);
         System.out.format("Result: zone=%d time=%.3fhr hehr%%=%.3f simtime=%dms%n",
         		sR.zone, sR.hours, 100d * sR.helium / p.getSpentHelium() / sR.hours,
         		(System.nanoTime() - times) / 1000000l);
     }
 
-    public SimulationResult runSimulation() {
-    	return runSimulation(debug);
+    public SimulationResult runSimulation(double hours) {
+    	return runSimulation(hours, debug);
     }
     
-    public SimulationResult runSimulation(int debug) {
+    // hours arg tells how many hours to run (ignoring he/hr)
+    public SimulationResult runSimulation(double hours, int debug) {
     	this.debug = debug;
         double highestHeHr = 0;
         while (true) {
@@ -94,11 +94,15 @@ public class TrimpsSimulation {
             	doZone();
             }
             endZone();
-            double newHeHr = getHeHr();
-            if (newHeHr < highestHeHr) {
-                break;
+            if (hours == 0) {
+            	double newHeHr = getHeHr();
+            	if (newHeHr < highestHeHr) {
+            		break;
+            	}
+            	highestHeHr = newHeHr;
+            } else if (time > 3600 * hours) {
+            	break;
             }
-            highestHeHr = newHeHr;
         }
         return new SimulationResult(helium,time/3600,zone,motiMetal/totalMetal);
     }

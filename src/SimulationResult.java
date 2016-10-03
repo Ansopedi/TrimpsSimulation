@@ -8,6 +8,10 @@ public class SimulationResult {
      public double getHehr() {
     	 return helium / hours;
      }
+     
+     public double getMetric(boolean deepRun) {
+    	 return deepRun ? zone : getHehr();
+     }
 
      public SimulationResult(final double helium, final double hours, final int zone, 
     		 final double motiFraction){

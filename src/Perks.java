@@ -6,9 +6,10 @@ public class Perks {
     private double helium;
     private int[] perks = new int[Perk.values().length];
     private boolean fineTune = false;
+    private boolean deepRun = false;
     private DebugFilter df = new DebugFilter(1000);
     private final double BUY_SELL_INC = 0.02; // percentage of levels to buy or sell at a time (when not fineTuning)
-    private final double FINE_TUNE_CLAMP_POWER = 0.3; // how tightly to control buy/sell range during fineTune
+    private final double FINE_TUNE_CLAMP_POWER = .3; // how tightly to control buy/sell range during fineTune
 
     public Perks(final int[] perks, final double helium) {
         totalHelium = helium;
@@ -293,7 +294,7 @@ public class Perks {
 //    				getLevel(statType.base),statType.hasSpirePerk() ? getLevel(statType.spire) : "none");
 //    		}
     		// final clamp at no value, just in case - we can't handle negative helium gains (which are presumed to be fake)
-    		return Math.max((statType == tsFactor.LOOTING ? Y : 1), res);
+    		return Math.max((!deepRun && statType == tsFactor.LOOTING ? Y : 1), res);
     	}
     	
     	private double getClampedHeliumGain( double X, double Y, double clamp, boolean belowLowerBound ) {
@@ -309,6 +310,7 @@ public class Perks {
 				}
     		} else {
     			// in the fineTune step, strongly discourage buying above the clamp range
+    			//if (fineTune) { return 1; }
     			if (statType == tsFactor.COORDINATED || fineTune) {
 					// exponent gets smaller and smaller with increasing X
 					res = Math.pow(Y, (A + B * Math.log(clamp) / Math.log(T)) / (X * Math.sqrt(Y) / clamp));
@@ -472,9 +474,10 @@ public class Perks {
    
     // given a set of TrimpsSimulation factor efficiencies, guess a better set of perks
     // return true if perks were changed, else false
-    public boolean permutePerks(double[][] effStats, boolean fineTune) {
+    public boolean permutePerks(double[][] effStats, boolean fineTune, boolean deepRun) {
     	
     	this.fineTune = fineTune;
+    	this.deepRun = deepRun;
     	
     	// Use an array for efficient sorting by 2 different comparators (buy and sell efficiency)
     	// -> The list is small, so the sort operation should be fast.

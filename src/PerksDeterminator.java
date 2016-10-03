@@ -14,12 +14,12 @@ public class PerksDeterminator {
         //        59, 80, 44 };
     	//int[] perkArray = new int[] {96,94,93,105,131600,86400,27400,103100,61,92,43};
     	int[] perkArray = new int[] { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
-        double totalHelium = 12.2e+9;
+        double totalHelium = 12.6e+9;
         // TODO check for non-bought ones
         Perks perks = new Perks(perkArray, totalHelium);
         PerksDeterminator pD = new PerksDeterminator(perks);
         pD.printPerksToFile();
-        Perks result = pD.determinePerksPermute();
+        Perks result = pD.determinePerksPermute(24);
         for (int x = 0; x < Perk.values().length; x++) {
             System.out.print(Perk.values()[x].name() + " : "
                     + result.getLevel(Perk.values()[x]) + " ");
@@ -30,27 +30,28 @@ public class PerksDeterminator {
         this.perks = perks;
     }
     
-    public Perks determinePerksPermute() {
+    // deepRunHours should be 0 if trying to optimize he/hr instead of a deep run
+    public Perks determinePerksPermute(double deepRunHours) {
     	ProbabilisticZoneModel zS =
         		new ProbabilisticZoneModel(
         				TrimpsSimulation.critChance,
         				TrimpsSimulation.critDamage,
         				TrimpsSimulation.okFactor);
-        double bestHeHr = 0;
-        double heHr = 0;
+        double bestRes = 0;
+        double resMetric = 0;
         Perks bestPerks = new Perks(perks);
         Perks dpPerks = new Perks(perks);
         long startTime = System.nanoTime();
         boolean fineTune = false;
         int keepTrying = 3;
         do {
-        	bestHeHr = Math.max(heHr, bestHeHr);
+        	bestRes = Math.max(resMetric, bestRes);
 	    	TrimpsSimulation tS = new TrimpsSimulation(dpPerks.getTSFactors(), false, zS);
-	    	SimulationResult sR = tS.runSimulation();
-	    	heHr = sR.helium / sR.hours;
-	    	System.out.format("baseline %5e he/hr with perks: %s%n", heHr, Arrays.toString(dpPerks.getPerkLevels()));
-        	if (heHr > bestHeHr) {
-        		bestHeHr = heHr;
+	    	SimulationResult sR = tS.runSimulation(deepRunHours);
+	    	resMetric = deepRunHours > 0 ? sR.zone : sR.getMetric(false);
+	    	System.out.format("baseline %5e resMetric with perks: %s%n", resMetric, Arrays.toString(dpPerks.getPerkLevels()));
+        	if (resMetric > bestRes) {
+        		bestRes = resMetric;
         		bestPerks = new Perks(dpPerks);
         		keepTrying = 3;
         	} else if (!fineTune) {
@@ -60,14 +61,14 @@ public class PerksDeterminator {
         		break;
         	}
 	    	//long time = System.nanoTime();
-	    	double[][] rawEffs = calcPerkEfficiencies(dpPerks, zS, sR, fineTune, 1);
+	    	double[][] rawEffs = calcPerkEfficiencies(dpPerks, zS, sR, fineTune, deepRunHours, 1);
 	    	//long time2 = System.nanoTime();
 	    	//System.out.println((time2-time)/1000000l + "ms to run sims");
 	    	// 
-	        dpPerks.permutePerks(rawEffs, fineTune);
+	        dpPerks.permutePerks(rawEffs, fineTune, deepRunHours > 0);
 	    	//System.out.println((System.nanoTime() - time2) / 1000000l + "ms to run permute");
         } while (true);
-        System.out.format("best he/hr of %5e with perks: %s%n", bestHeHr, Arrays.toString(bestPerks.getPerkLevels()));
+        System.out.format("best resMetric of %5e with perks: %s%n", bestRes, Arrays.toString(bestPerks.getPerkLevels()));
         System.out.println((System.nanoTime() - startTime)/1000000l + "ms to determine perks");
         return new Perks(bestPerks);
     }
@@ -79,7 +80,7 @@ public class PerksDeterminator {
                 TrimpsSimulation.okFactor);
         double[] tsFactors = perks.getTSFactors();
         TrimpsSimulation tS = new TrimpsSimulation(tsFactors, false, zS);
-        SimulationResult prev = tS.runSimulation();
+        SimulationResult prev = tS.runSimulation(0);
         while (true) {
             long time = System.nanoTime();
             int bestPerk = 0;
@@ -135,10 +136,12 @@ public class PerksDeterminator {
     // -but do note there can be butterfly effects (related to specific prestige buys late in the run
     //  that may result in insufficient fidelity with small effect sizes
     private static double[][] calcPerkEfficiencies( Perks perks, ZoneSimulation zS,
-    		SimulationResult resBase, boolean fineTune, int debug) {
+    		SimulationResult resBase, boolean fineTune, double deepRunHours, int debug) {
+    	
+    	boolean deepRun = deepRunHours > 0;
     	double[] tsFactors = perks.getTSFactors();
     	double[] testFactors = Arrays.copyOf(tsFactors, Perks.numTSFactors);
-    	double hehrBase = resBase.getHehr();
+    	double hehrBase = resBase.getMetric(deepRun);
     	double[][] res = new double[3][Perks.numTSFactors];
     	TrimpsSimulation tS;
     	
@@ -146,7 +149,7 @@ public class PerksDeterminator {
 		SimulationResult curRes = resBase;
 		SimulationResult lastRes = resBase;
 		// loop selling coord until both the last point and the next point have value
-		while (nextRes.getHehr() <= curRes.getHehr() || curRes.getHehr() <= lastRes.getHehr()) {
+		while (nextRes.getMetric(deepRun) <= curRes.getMetric(deepRun) || curRes.getMetric(deepRun) <= lastRes.getMetric(deepRun)) {
 			
 			nextRes = curRes;
 			curRes = lastRes;
@@ -154,22 +157,22 @@ public class PerksDeterminator {
 			testFactors[Perks.tsFactor.COORDINATED.ordinal()]
 					= Perks.calcCoordFactor(perks.getLevel(Perk.COORDINATED) - 1);
 			tS = new TrimpsSimulation(testFactors, false, zS);
-			lastRes = tS.runSimulation(debug-1);
+			lastRes = tS.runSimulation(deepRunHours, debug-1);
 			
-			if (lastRes.getHehr() < curRes.getHehr()) {
+			if (lastRes.getMetric(deepRun) < curRes.getMetric(deepRun)) {
 				if (nextRes == resBase) {
 					// still need to test +1 point if -1 point had an effect on the first try
 					testFactors[Perks.tsFactor.COORDINATED.ordinal()]
 							= Perks.calcCoordFactor(perks.getLevel(Perk.COORDINATED) + 1);
 					tS = new TrimpsSimulation(testFactors, false, zS);
-					nextRes = tS.runSimulation(debug-1);
-					if (nextRes.getHehr() <= curRes.getHehr()) {
+					nextRes = tS.runSimulation(deepRunHours, debug-1);
+					if (nextRes.getMetric(deepRun) <= curRes.getMetric(deepRun)) {
 						// next point has no effect, sell one and try again
 						perks.buyPerk(Perk.COORDINATED, -1);
 					} else {
 						// we're done, will exit the loop (lastres<curres, and nextres>curRes)
 					}
-				} else if (nextRes.getHehr() <= curRes.getHehr()) {
+				} else if (nextRes.getMetric(deepRun) <= curRes.getMetric(deepRun)) {
 					perks.buyPerk(Perk.COORDINATED, -1);
 				} else {
 					// we're done if both points had effect
@@ -180,13 +183,13 @@ public class PerksDeterminator {
 			}
 		}
 		resBase = curRes;
-		hehrBase = resBase.getHehr();
+		hehrBase = resBase.getMetric(deepRun);
 		tsFactors = perks.getTSFactors();
 		
 		// now we are at a coord level where the last point and next point have value
 		
-		double coordNextGain = nextRes.getHehr() / hehrBase;
-		double coordLastGain = hehrBase / lastRes.getHehr();
+		double coordNextGain = nextRes.getMetric(deepRun) / hehrBase;
+		double coordLastGain = hehrBase / lastRes.getMetric(deepRun);
 		
 		// TODO: trying to eliminate the next-point-of-coord-is-worthless stuff
 		// these may be used in cases where coordNextGain == 1 so that coord needs a special derivation
@@ -207,8 +210,8 @@ public class PerksDeterminator {
 		// Skipping over the long derivation, we can calculate total helium gain as follows:
 		// 	H(X,Y) = Y^(A + B * log(X,T) + (B/2) * log(Y,T))
 		// We aim to calculate A and B for each perk, knowing the values of:
-		// H(1/T,T) = hehrBase / lastRes.getHehr();
-		// H(1,T) = nextRes.getHehr() / hehrBase;
+		// H(1/T,T) = hehrBase / lastRes.getMetric(deepRun);
+		// H(1,T) = nextRes.getMetric(deepRun) / hehrBase;
 		// With these values A and B, we can calculate H(X,Y) for buying or selling any amount of any perk,
 		// 	where X accounts for stat gain redundancies between different perks.
 		// e.g. "X" for motivation is really the motivation factor (over baseline) TIMES the carpentry factor.
@@ -232,17 +235,17 @@ public class PerksDeterminator {
 				
 				testFactors[f.ordinal()] = tsFactors[f.ordinal()] * T;
 				tS = new TrimpsSimulation(testFactors, false, zS);
-				nextRes = tS.runSimulation(debug-1);
+				nextRes = tS.runSimulation(deepRunHours, debug-1);
 				testFactors[f.ordinal()] = tsFactors[f.ordinal()] / T;
 				tS = new TrimpsSimulation(testFactors, false, zS);
-				lastRes = tS.runSimulation(debug-1);
+				lastRes = tS.runSimulation(deepRunHours, debug-1);
 
-				nextGain = nextRes.getHehr() / hehrBase;
-				lastGain = hehrBase / lastRes.getHehr();
+				nextGain = nextRes.getMetric(deepRun) / hehrBase;
+				lastGain = hehrBase / lastRes.getMetric(deepRun);
 				
 				// for looting we always get a gain of 1 from the helium alone,
 				//	so try a bigger adjust if that's all we got
-				double gainComp = f == Perks.tsFactor.LOOTING ? 1 : 0;
+				double gainComp = (!deepRun && f == Perks.tsFactor.LOOTING) ? 1 : 0;
 				if (nextGain > gainComp && lastGain > gainComp) {
 					break;
 				} else {
@@ -374,11 +377,11 @@ public class PerksDeterminator {
     		
     	}
     	
-//    	System.out.format("perks=%s%nA=%s%nB=%s%nT=%s%n",
-//    			Arrays.toString(perks.getPerkLevels()),
-//    			Arrays.toString(res[0]),
-//    			Arrays.toString(res[1]),
-//    			Arrays.toString(res[2]));
+    	System.out.format("perks=%s%nA=%s%nB=%s%nT=%s%n",
+    			Arrays.toString(perks.getPerkLevels()),
+    			Arrays.toString(res[0]),
+    			Arrays.toString(res[1]),
+    			Arrays.toString(res[2]));
     	return res;
     }
 
@@ -460,7 +463,7 @@ public class PerksDeterminator {
 
         public void run() {
             TrimpsSimulation tS = new TrimpsSimulation(perks.getTSFactors(), false, zS);
-            sR = tS.runSimulation();
+            sR = tS.runSimulation(0);
         }
 
         private double getRelativeEfficiency() {
