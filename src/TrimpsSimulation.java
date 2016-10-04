@@ -6,27 +6,28 @@ import java.util.List;
 public class TrimpsSimulation {
 
     public final static int goldenFrequency = 30;
-    public final static int blacksmitheryZone = 299;
-    public final static double critChance = 0.726;
-    public final static double critDamage = 13.7;
-    public final static double cellDelay = 0.4;
-    public final static double attackDelay = 0.258;
-    public final static double okFactor = 0.15;
-    public final static double achievementDamage = 14.352;
-    public final static double heirloomDamage = 5.7;
-    public final static double robotrimpDamage = 7.6;
-    public final static double heirloomMetalDrop = 6.04;
-    public final static double heirloomMinerEff = 6.12;
-    public final static int corruptionStart = 151;
-    public final static double turkimpMod = 1.75;
+    public final static int blacksmitheryZone = 151;
+    public final static double critChance = 0.664;
+    public final static double critDamage = 11;
+    public final static double cellDelay = 0.500;
+    public final static double attackDelay = 0.358;
+    public final static double okFactor = 0.085;
+    public final static double achievementDamage = 13.3;
+    public final static double heirloomDamage = 4.1;
+    public final static double robotrimpDamage = 3.6;
+    public final static double heirloomMetalDrop = 3.8;
+    public final static double heirloomMinerEff = 4.2;
+    public final static int corruptionStart = 166;
+    public final static double turkimpMod = 1.5;
     public final static double turkimpDropMod = (turkimpMod == 1.75) ? 1.249 : 1.166;
     public final static double dropsPerZone = 17;
-    public final static double mapSize = 26;
+    public final static double mapSize = 28;
     public final static double dropsPerMap = mapSize / 2d / 3d; // garden drop (1/3 metal) on 1/2 cells
-    public final static double minerFraction = 0.99;
-    public final static int packrat = 70;
+    public final static double minerFraction = 0.98;
+    public final static int packrat = 40;
     public final static boolean optimizeMaps = true; // true=optimize maps by doing test sims, false=use fixed grid based on damageFactor
     public final static double armorFraction = 0.01; // fraction of metal spent on armor
+    public final static double healthFraction = 0.03; // fraction of helium spent on health
     private final static double[] mapOffsets = new double[] { 100, 0.75, 0.5,
             0.2, 0.13, 0.08, 0.05, 0.036, 0.03, 0.0275 };
     private final boolean useCache;
@@ -56,6 +57,8 @@ public class TrimpsSimulation {
     private PopulationManager pM;
     private ZoneSimulation zoneSimulation;
     private int debug = 0;
+    private double totalMetal;
+    private double motiMetal; // track what portion of metal comes from motivation
     
     // expected dodges per hit for dodge imps
     private final static int dodgeLength = 20;
@@ -69,18 +72,18 @@ public class TrimpsSimulation {
         TrimpsSimulation tS = new TrimpsSimulation(p.getTSFactors(), false,
                 //new AveragedZoneSimulation());
         		new ProbabilisticZoneModel(critChance, critDamage, okFactor));
-        double highestHeHr = 0;
-        SimulationResult sR = tS.runSimulation();
+        SimulationResult sR = tS.runSimulation(0, 0);
         System.out.format("Result: zone=%d time=%.3fhr hehr%%=%.3f simtime=%dms%n",
         		sR.zone, sR.hours, 100d * sR.helium / p.getSpentHelium() / sR.hours,
         		(System.nanoTime() - times) / 1000000l);
     }
 
-    public SimulationResult runSimulation() {
-    	return runSimulation(debug);
+    public SimulationResult runSimulation(double hours) {
+    	return runSimulation(hours, debug);
     }
     
-    public SimulationResult runSimulation(int debug) {
+    // hours arg tells how many hours to run (ignoring he/hr)
+    public SimulationResult runSimulation(double hours, int debug) {
     	this.debug = debug;
         double highestHeHr = 0;
         while (true) {
@@ -92,13 +95,17 @@ public class TrimpsSimulation {
             	doZone();
             }
             endZone();
-            double newHeHr = getHeHr();
-            if (newHeHr < highestHeHr) {
-                break;
+            if (hours == 0) {
+            	double newHeHr = getHeHr();
+            	if (newHeHr < highestHeHr) {
+            		break;
+            	}
+            	highestHeHr = newHeHr;
+            } else if (time > 3600 * hours) {
+            	break;
             }
-            highestHeHr = newHeHr;
         }
-        return new SimulationResult(helium,time/3600,zone);
+        return new SimulationResult(helium,time/3600,zone,motiMetal/totalMetal);
     }
 
     public TrimpsSimulation(
@@ -193,6 +200,8 @@ public class TrimpsSimulation {
 	        eM.save();
 	        pM.save();
 	        double SVmetal = metal;
+	        double SVtotalMetal = totalMetal;
+	        double SVmotiMetal = motiMetal;
 	        double mapTime = 0;
 	        double bestTime = Double.POSITIVE_INFINITY;
 	        double bestZoneTime = 0;
@@ -230,6 +239,8 @@ public class TrimpsSimulation {
 		            	eM.save();
 		            	pM.save();
 		            	SVmetal = metal;
+		            	SVtotalMetal = totalMetal;
+		            	SVmotiMetal = motiMetal;
 		            	mapsRunZone = maps;
 		            }
 		            maps++;
@@ -237,6 +248,8 @@ public class TrimpsSimulation {
 		        eM.restore();
 		        pM.restore();
 		        metal = SVmetal;
+		        totalMetal = SVtotalMetal;
+		        motiMetal = SVmotiMetal;
 	        }
 	        time += bestTime;
 	        addProduction(bestZoneTime, dropsPerZone, 1);
@@ -271,10 +284,14 @@ public class TrimpsSimulation {
         // TODO won't always be able to run the best possible map, actually calcuate resources for highest map that can actually be run
     	// -> may need a correction to runtime as well
     	// Chrono/Jest drops
-    	metal += jCMod * (5d + 45d/6d) * (mapSize / 33.33d)
+    	double addmetal =
+    			jCMod * (5d + 45d/6d) * (mapSize / 33.33d)
     			* 2 // scrying
     			* 1.815 * (0.8 + 0.1 * mapSize / 100d) // 181.5% avg map difficulty, derated because loot is scaled based on 100 cells
     			* pM.getPopulation();
+    	metal += addmetal;
+    	motiMetal += addmetal;
+    	totalMetal += addmetal;
     	addProduction(cellDelay * mapSize / 2d, dropsPerMap, 2);
     	buyStuff();
     	return (cellDelay * mapSize / 2d);
@@ -336,8 +353,13 @@ public class TrimpsSimulation {
     }
     
     private void addProduction(double time, double nDrops, double scryFactor) {
-    	metal += metalMod * time * pM.getPopulation();
-        metal += dropMod * nDrops * scryFactor * pM.getPopulation();
+    	double addmetal = metalMod * time * pM.getPopulation();
+    	metal += addmetal;
+    	totalMetal += addmetal;
+    	motiMetal += addmetal;
+        addmetal = dropMod * nDrops * scryFactor * pM.getPopulation();
+        metal += addmetal;
+        totalMetal += addmetal;
     }
 
     private void endZone() {
