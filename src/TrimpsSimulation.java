@@ -7,12 +7,12 @@ public class TrimpsSimulation {
 
     public final static int goldenFrequency = 30;
     public final static int blacksmitheryZone = 151;
-    public final static double critChance = 0.662;
+    public final static double critChance = 0.664;
     public final static double critDamage = 11;
-    public final static double cellDelay = 0.5;
+    public final static double cellDelay = 0.500;
     public final static double attackDelay = 0.358;
-    public final static double okFactor = 0.075;
-    public final static double achievementDamage = 12.902;
+    public final static double okFactor = 0.085;
+    public final static double achievementDamage = 13.3;
     public final static double heirloomDamage = 4.1;
     public final static double robotrimpDamage = 3.4;
     public final static double heirloomMetalDrop = 3.8;
@@ -27,6 +27,8 @@ public class TrimpsSimulation {
     public final static int packrat = 40;
     public final static boolean optimizeMaps = true; // true=optimize maps by doing test sims, false=use fixed grid based on damageFactor
     public final static double armorFraction = 0.01; // fraction of metal spent on armor
+    public final static double healthFraction = 0.05; // fraction of helium spent on health
+    public final static boolean computeOverkill = true; // should we compute an overkill level?
     private final static double[] mapOffsets = new double[] { 100, 0.75, 0.5,
             0.2, 0.13, 0.08, 0.05, 0.036, 0.03, 0.0275 };
     private final boolean useCache;

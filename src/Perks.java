@@ -11,9 +11,28 @@ public class Perks {
     private final double BUY_SELL_INC = 0.02; // percentage of levels to buy or sell at a time (when not fineTuning)
     private final double FINE_TUNE_CLAMP_POWER = .3; // how tightly to control buy/sell range during fineTune
 
+    public static void main(String[] args) {
+    	int[] perkArray = new int[] {65, 61, 66, 63, 1919, 1035, 700, 197, 36, 61, 6};
+    	Perks perks = new Perks(0);
+    	for (int i = 0; i < Perk.values().length; i++) {
+    		int level = perkArray[i];
+    		String name = Perk.values()[i].name();
+    		double cost = perks.perkCost(Perk.values()[i],level);
+    		System.out.format("perk cost for %s %d: %.3e%n", name, level, cost);
+    	}
+    	perks = new Perks(perkArray);
+    	System.out.format("total helium: %.3e%n", perks.totalHelium);
+    }
+    
+    public Perks( final double totalHelium ) {
+    	this.perks = new int[] {0,0,0,0,0,0,0,0,0,0};
+    	this.totalHelium = helium * (1 - TrimpsSimulation.healthFraction);
+    	this.helium = 0;
+    }
+    
     public Perks(final int[] perks, final double helium) {
-        totalHelium = helium;
-        this.helium = helium;
+        totalHelium = helium * (1 - TrimpsSimulation.healthFraction);
+        this.helium = helium * (1 - TrimpsSimulation.healthFraction);
         for (int i = 0; i < Perk.values().length; i++) {
             this.perks[i] = 0;
             buyPerk(Perk.values()[i],perks[i]);
@@ -54,6 +73,112 @@ public class Perks {
     			return i % n == 0;
     		}
     	}
+    }
+    
+    private enum HealthPerk {
+    	RESILIENCE(100,1.3,false,1.1,true),
+    	TOUGHNESS(1,1.3,false,.05,false),
+    	TOUGHNESS2(20000,500,true,.01,false),
+    	PHEROMONES(3,1.3,false,.1,false);
+    	
+    	public final double base;
+    	public final double inc;
+    	public final boolean additive;
+    	public final double effect;
+    	public final boolean compounding;
+    	
+    	HealthPerk(double base, double inc, boolean additive, double effect, boolean compounding) {
+    		this.base = base;
+    		this.inc = inc;
+    		this.additive = additive;
+    		this.effect = effect;
+    		this.compounding = compounding;
+    	}
+    	
+    	public double getLevelCost( int level ) {
+    		if (additive) {
+    			return base + inc * (level - 1);
+    		} else {
+    			return Math.round(base * Math.pow(inc,level-1) + level/2);
+    		}
+    	}
+    	
+    	public double getLevelEffect( int level ) {
+    		if (compounding) {
+    			return effect;
+    		} else if (this == PHEROMONES) {
+    			double res = 1 + 1 / (1/effect + level);
+    			res = Math.log(res) / Math.log(1.02); // # of geneticists
+    			res = Math.pow(1.01, res); // health bonus of geneticists
+    			return res;
+    		} else {
+    			return 1 + 1/ (1/effect + level);
+    		}
+    	}
+    }
+    
+    private class HealthPerkEfficiency {
+    	public final HealthPerk perk;
+    	private int level;
+    	private double cost;
+    	private double totalHelium;
+    	private double efficiency;
+    	
+    	public void buyPerk() {
+    		level += 1;
+    		cost = perk.getLevelCost(level + 1);
+    		efficiency = calcEfficiency();
+    	}
+    	
+    	public double getEfficiency() { return efficiency; }
+    	
+    	public double getCost() { return cost; }
+    	
+    	public int getLevel() { return level; }
+    	
+    	public HealthPerkEfficiency( HealthPerk perk, double totalHelium ) {
+    		this.perk = perk;
+    		this.level = 0;
+    		this.cost = perk.getLevelCost(this.level + 1);
+    		this.totalHelium = totalHelium;
+    		this.efficiency = calcEfficiency();
+    	}
+    	
+    	private double calcEfficiency() {
+    		return Math.log(perk.getLevelEffect(level + 1)) / Math.log(1 + cost/this.totalHelium);
+    	}
+    }
+    
+    private static Comparator<HealthPerkEfficiency> HealthPerkComp = new Comparator<HealthPerkEfficiency>() {
+    	@Override
+    	public int compare(HealthPerkEfficiency a, HealthPerkEfficiency b) {
+    		return a.getEfficiency() < b.getEfficiency() ? 1 :
+    				(a.getEfficiency() == b.getEfficiency()) ? 0 : -1;
+    	}
+    };
+    
+    public int[] calcHealthPerks( double helium ) {
+    	HealthPerkEfficiency resi = new HealthPerkEfficiency(HealthPerk.RESILIENCE, helium);
+    	HealthPerkEfficiency tou = new HealthPerkEfficiency(HealthPerk.TOUGHNESS, helium);
+    	HealthPerkEfficiency tou2 = new HealthPerkEfficiency(HealthPerk.TOUGHNESS2, helium);
+    	HealthPerkEfficiency pher = new HealthPerkEfficiency(HealthPerk.PHEROMONES, helium);
+    	HealthPerkEfficiency[] hpes = new HealthPerkEfficiency[]
+    			{ resi, tou, tou2, pher };
+    	boolean bought;
+    	do {
+    		bought = false;
+    		Arrays.sort(hpes,HealthPerkComp);
+    		for ( HealthPerkEfficiency h : hpes ) {
+    			if ( h.getCost() <= helium ) {
+    				//System.out.format("bought %s for %.3e helium%n", h.perk.name(), h.getCost());
+    				helium -= h.getCost();
+    				h.buyPerk();
+    				bought = true;
+    				break;
+    			}
+    		}
+    	} while (bought);
+    	return new int[] { resi.getLevel(), tou.getLevel(), tou2.getLevel(), pher.getLevel() };
     }
     
     public int getLevel(final Perk perk){

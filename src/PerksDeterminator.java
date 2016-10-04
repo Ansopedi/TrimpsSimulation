@@ -13,17 +13,20 @@ public class PerksDeterminator {
         //int[] perkArray = new int[] { 80, 80, 80, 90, 40000, 20000, 9000, 27000,
         //        59, 80, 44 };
     	//int[] perkArray = new int[] {96,94,93,105,131600,86400,27400,103100,61,92,43};
-    	int[] perkArray = new int[] { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
-        double totalHelium = 12.6e+9;
+    	//int[] perkArray = new int[] { 0, 0, 0, 0, 0, 0, 0, 0, 30, 0, 0 };
+    	int[] perkArray = new int[] { 63, 60, 63, 73, 1333, 948, 439, 1037, 34, 53, 16 };
+        double totalHelium = 14e+9;
         // TODO check for non-bought ones
         Perks perks = new Perks(perkArray, totalHelium);
         PerksDeterminator pD = new PerksDeterminator(perks);
         pD.printPerksToFile();
-        Perks result = pD.determinePerksPermute(24);
+        Perks result = pD.determinePerksPermute(0);
         for (int x = 0; x < Perk.values().length; x++) {
             System.out.print(Perk.values()[x].name() + " : "
                     + result.getLevel(Perk.values()[x]) + " ");
         }
+        int[] healthPerks = perks.calcHealthPerks(totalHelium * TrimpsSimulation.healthFraction);
+        System.out.format("%nRESI/TOU/TOU2/PHER= %s%n", Arrays.toString(healthPerks));
     }
 
     public PerksDeterminator(final Perks perks) {
