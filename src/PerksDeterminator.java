@@ -27,6 +27,8 @@ public class PerksDeterminator {
         }
         int[] healthPerks = perks.calcHealthPerks(totalHelium * TrimpsSimulation.healthFraction);
         System.out.format("%nRESI/TOU/TOU2/PHER= %s%n", Arrays.toString(healthPerks));
+        System.out.format("Suggested Overkill level (not included in helium total): %d%n",
+        		perks.computeOverkillLevel());
     }
 
     public PerksDeterminator(final Perks perks) {

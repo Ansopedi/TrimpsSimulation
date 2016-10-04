@@ -75,6 +75,23 @@ public class Perks {
     	}
     }
     
+    public int computeOverkillLevel() {
+    	int powerLevel = perks[Perk.POWER.ordinal()];
+    	double powerEffect = getTSFactor(Perk.POWER, powerLevel + 1) / getTSFactor(Perk.POWER, powerLevel);
+    	double powerCost = 1 + perkCost(Perk.POWER,1)/totalHelium;
+    	double powerEfficiency = Math.log(powerEffect) / Math.log(powerCost);
+    	//System.out.format("power level %d effect/cost: %.4f %.3e%n", powerLevel, powerEffect, powerCost);
+    	for (int okLevel = 1; okLevel < 30; okLevel++) {
+    		double okCost = Math.round(1000000 * Math.pow(1.3, okLevel) + okLevel/2);
+    		okCost = 1 + okCost/totalHelium;
+    		double okEffect = (okLevel + 1) / (double) okLevel;
+    		double okEfficiency = Math.log(okEffect) / Math.log(okCost);
+    		//System.out.format("OK level %d effect/cost: %.4f %.3e%n", okLevel, okEffect, okCost);
+    		if (okEfficiency < powerEfficiency) { return okLevel; }
+    	}
+    	return 30;
+    }
+    
     private enum HealthPerk {
     	RESILIENCE(100,1.3,false,1.1,true),
     	TOUGHNESS(1,1.3,false,.05,false),

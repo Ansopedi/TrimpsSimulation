@@ -14,7 +14,7 @@ public class TrimpsSimulation {
     public final static double okFactor = 0.085;
     public final static double achievementDamage = 13.3;
     public final static double heirloomDamage = 4.1;
-    public final static double robotrimpDamage = 3.4;
+    public final static double robotrimpDamage = 3.6;
     public final static double heirloomMetalDrop = 3.8;
     public final static double heirloomMinerEff = 4.2;
     public final static int corruptionStart = 166;
@@ -27,8 +27,7 @@ public class TrimpsSimulation {
     public final static int packrat = 40;
     public final static boolean optimizeMaps = true; // true=optimize maps by doing test sims, false=use fixed grid based on damageFactor
     public final static double armorFraction = 0.01; // fraction of metal spent on armor
-    public final static double healthFraction = 0.05; // fraction of helium spent on health
-    public final static boolean computeOverkill = true; // should we compute an overkill level?
+    public final static double healthFraction = 0.03; // fraction of helium spent on health
     private final static double[] mapOffsets = new double[] { 100, 0.75, 0.5,
             0.2, 0.13, 0.08, 0.05, 0.036, 0.03, 0.0275 };
     private final boolean useCache;
